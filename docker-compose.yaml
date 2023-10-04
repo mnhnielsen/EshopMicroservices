@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  mongodb-product_service:
+    image: mongo:6-jammy
+    ports:
+      - "27017:27017"
+    expose:
+      - "27017"
+    volumes:
+      - ./mongo-data:/data/db
