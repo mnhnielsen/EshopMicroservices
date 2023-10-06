@@ -8,6 +8,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="product_service" />
+        <module name="EshopMicroservices" />
       </profile>
     </annotationProcessing>
   </component>
