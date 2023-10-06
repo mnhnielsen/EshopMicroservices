@@ -2,11 +2,13 @@ package dk.sdu.product_service.controller;
 
 import dk.sdu.product_service.ProductService;
 import dk.sdu.product_service.dto.ProductDto;
+import dk.sdu.product_service.model.Product;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("api/product")
@@ -18,6 +20,12 @@ public class ProductController {
     @ResponseStatus(HttpStatus.OK)
     public List<ProductDto> getAllProducts(){
         return productService.getAllProducts();
+    }
+
+    @GetMapping(value = "/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    public Optional<ProductDto> getProduct(@PathVariable String id){
+        return productService.getProduct(id);
     }
 
     @PostMapping

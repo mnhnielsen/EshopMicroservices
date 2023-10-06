@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,6 +21,11 @@ public class ProductService {
     public List<ProductDto> getAllProducts(){
         var products = productRepository.findAll();
         return products.stream().map(productDtoMapper).collect(Collectors.toList());
+    }
+
+    public Optional<ProductDto> getProduct(String id){
+        var product = productRepository.findById(id);
+        return product.map(productDtoMapper);
     }
 
     public void createProduct(ProductDto productDto) {
