@@ -8,9 +8,11 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="product_service" />
-        <module name="EshopMicroservices" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="EshopMicroservices" target="21" />
+    </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
