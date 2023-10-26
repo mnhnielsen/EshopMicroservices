@@ -8,3 +8,11 @@ services:
       - "27017"
     volumes:
       - ./mongo-data:/data/db
+  mongo-inventory_service:
+    image: mongo:6-jammy
+    ports:
+      - "27018:27018"
+    expose:
+      - "27018"
+    volumes:
+      - ./mongo-data:/data/db
