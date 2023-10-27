@@ -1,4 +1,4 @@
-package dk.sdu.product_service;
+package dk.sdu.product_service.service;
 
 import dk.sdu.product_service.dto.ProductDto;
 import dk.sdu.product_service.mapper.ProductDtoMapper;
@@ -26,18 +26,5 @@ public class ProductService {
     public Optional<ProductDto> getProduct(String id){
         var product = productRepository.findById(id);
         return product.map(productDtoMapper);
-    }
-
-    public void createProduct(ProductDto productDto) {
-        Product product = Product.builder()
-                .name(productDto.getName())
-                .description(productDto.getDescription())
-                .price(productDto.getPrice())
-                .stock(productDto.getStock())
-                .bikeType(productDto.getBikeType())
-                .build();
-
-        productRepository.save(product);
-        log.info("Product {} is saved", product.getId());
     }
 }
