@@ -33,7 +33,7 @@ public class InventoryController {
         inventoryService.addToInventory(inventoryDto);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/delete/{id}")
     @ResponseStatus(HttpStatus.OK)
     public void deleteProductFromInventory (@PathVariable String id){
         inventoryService.deleteFromInventory(id);
