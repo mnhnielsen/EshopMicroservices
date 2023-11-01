@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-
 public class InventoryService {
     private final InventoryRepository inventoryRepository;
     private final InventoryDtoMapper inventoryDtoMapper;

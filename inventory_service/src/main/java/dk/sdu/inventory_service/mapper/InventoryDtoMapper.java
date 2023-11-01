@@ -2,9 +2,10 @@ package dk.sdu.inventory_service.mapper;
 
 import dk.sdu.inventory_service.dto.InventoryDto;
 import dk.sdu.inventory_service.model.Inventory;
+import org.springframework.stereotype.Service;
 
 import java.util.function.Function;
-
+@Service
 public class InventoryDtoMapper implements Function<Inventory, InventoryDto> {
 
     @Override

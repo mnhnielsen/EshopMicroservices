@@ -13,6 +13,6 @@ services:
     ports:
       - "27018:27018"
     expose:
-      - "27018"
+      - "27017"
     volumes:
       - ./mongo-data:/data/db
