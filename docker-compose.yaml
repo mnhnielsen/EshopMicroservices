@@ -15,7 +15,7 @@ services:
   mongo-inventory_service:
     image: mongo:6-jammy
     ports:
-      - "27018:27018"
+      - "27018:27017"
     expose:
       - "27018"
     volumes:
@@ -23,5 +23,5 @@ services:
     networks:
       - default
 
-networks:
-  default:
+#networks:
+#  default:
