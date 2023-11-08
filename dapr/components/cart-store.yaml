@@ -1,0 +1,16 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: basket-store
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: redisBasket:6379
+    - name: redisPassword
+      value: ""
+    - name: actorStateStore
+      value: "true"
+    - name: ttlInSeconds
+      value: 900 # Optional
