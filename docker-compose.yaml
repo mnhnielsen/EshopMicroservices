@@ -32,4 +32,20 @@ services:
     expose:
       - "27017"
     volumes:
-      - ./mongo-data:/data/db
+      - ./mongo-product-service-data:/data/db
+    networks:
+      - default
+
+  mongo-inventory_service:
+    image: mongo:6-jammy
+    ports:
+      - "27018:27017"
+    expose:
+      - "27018"
+    volumes:
+      - ./mongo-inventory-service-data:/data/db
+    networks:
+      - default
+
+#networks:
+#  default:
