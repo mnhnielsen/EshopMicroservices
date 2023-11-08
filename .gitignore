@@ -23,5 +23,7 @@
 hs_err_pid*
 replay_pid*
 
+/mongo-inventory-service-data
+/mongo-product-service-data
 /mongo-data
 /.idea
