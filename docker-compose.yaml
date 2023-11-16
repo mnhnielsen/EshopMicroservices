@@ -47,5 +47,13 @@ services:
     networks:
       - default
 
-#networks:
-#  default:
+  eureka-server:
+    image: springcloud/eureka
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - default
+
+networks:
+  default:

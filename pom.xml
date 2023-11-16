@@ -20,6 +20,7 @@
 		<module>product_service</module>
 		<module>cart_service</module>
 		<module>inventory_service</module>
+		<module>api-gateway</module>
 	</modules>
 	<packaging>pom</packaging>
 	<dependencies>
