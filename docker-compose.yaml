@@ -47,5 +47,58 @@ services:
     networks:
       - default
 
+  redis-cart_service:
+    image: redis:7.2.3-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: [ "CMD", "nc", "-vz", "localhost", "6379" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zipkin:
+    image: "openzipkin/zipkin"
+    ports:
+      - "9411:9411"
+
+  cart_service:
+    build:
+      context: .
+      dockerfile: cart_service/Dockerfile
+    ports:
+      - "8001:80"
+    depends_on:
+      "kafka-broker":
+        condition: service_healthy
+      "redis-cart_service":
+        condition: service_healthy
+
+  cart-api-dapr:
+    image: "daprio/daprd:1.9.4"
+    network_mode: "service:cart_service"
+    command:
+      [
+        "./daprd",
+        "-app-id",
+        "cart_service",
+        "-app-port",
+        "80",
+        "-log-level",
+        "debug",
+        "-placement-host-address",
+        "dapr-placement:50000",
+        "-components-path",
+        "./dapr/components",
+        "-config",
+        "./dapr/config.yaml"
+      ]
+    volumes:
+      - "./dapr/:/dapr"
+    depends_on:
+      "kafka-broker":
+        condition: service_healthy
+
 #networks:
 #  default:
