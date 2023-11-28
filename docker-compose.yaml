@@ -68,7 +68,7 @@ services:
       context: .
       dockerfile: cart_service/Dockerfile
     ports:
-      - "8001:80"
+      - "8002:80"
     depends_on:
       "kafka-broker":
         condition: service_healthy
