@@ -56,8 +56,8 @@ services:
     networks:
       - default
 
-networks:
-  default:
+#networks:
+#  default:
 
   redis-cart_service:
     image: redis:7.2.3-alpine
@@ -112,5 +112,5 @@ networks:
       "kafka-broker":
         condition: service_healthy
 
-#networks:
-#  default:
+networks:
+  default:
