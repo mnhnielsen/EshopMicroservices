@@ -12,6 +12,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.http.HttpResponse;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -36,55 +39,32 @@ public class CartController {
 
     @GetMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    public Optional<Reservation> getBasket(@PathVariable String id) {
-        try (DaprClient daprClient = new DaprClientBuilder().build()) {
-            var result = daprClient.getState(redisStore,id,Reservation.class);
-            if (result == null) {
-                throw new IllegalArgumentException("no items in basket");
+    public Optional<Optional<HttpResponse<String>>> getReservation(@PathVariable String id, String storeName, Reservation reservation) {
+        try {
+            if (id.isEmpty()){
+                logger.info("there is no cart!!!!");
             }
-            return Optional.ofNullable(Objects.requireNonNull(result.block()).getValue());
-        } catch (Exception e) {
+            logger.info(id);
+            return Optional.of(Objects.requireNonNull(cartService.getState(storeName, reservation.customerId)));
+        } catch (URISyntaxException | IOException | InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
 
     @PostMapping(value = "/reserve")
-    public ResponseEntity<String> addProductToBasket(@RequestBody(required = false) Reservation reservation)
-    {
-        try(DaprClient daprClient = new DaprClientBuilder().build()){
-
-            if (reservation == null || reservation.getItems().isEmpty()) {
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-            }
-
-            daprClient.saveState(redisStore,reservation.getCustomerId(), Reservation.class).block();
-            for (var item: reservation.getItems()) {
-                var reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
-                logger.info(item.getProductId() + " Has been saved");
-                daprClient.publishEvent(pubSubName,"On_Products_Reserved",reservationEvent).block();
-            }
-            return new ResponseEntity<>(HttpStatus.CREATED);
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    // Same functionality as addProductToBasket(). This method uses HTTP requests instead of dapr sdk
-    @PostMapping(value = "/v2/reserve")
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) {
         try {
-            if (reservation == null || reservation.getItems().isEmpty()) {
+            if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
-
-            cartService.saveState(redisStore, reservation.getCustomerId(), reservationToJsonBytes(reservation));
-
+            cartService.saveState(redisStore, reservationToJsonBytes(reservation));
             for (var item : reservation.getItems()) {
                 cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEventToJsonBytes(reservation.getCustomerId(), item.getQuantity(), item.getProductId()));
+                logger.info("product added: " + item.getProductId());
+                logger.info(String.valueOf(reservation.getItems()));
             }
-
+            logger.info("state added for user:" + reservation.getCustomerId());
             return new ResponseEntity<>(HttpStatus.CREATED);
         } catch (Exception e) {
             throw new RuntimeException(e);
