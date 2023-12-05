@@ -71,7 +71,8 @@ public class CartController {
         }
     }
 
-    @PostMapping(value = "/removeProduct/{id}")
+    @DeleteMapping(value = "/removeProduct/{id}")
+    @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<String> removeProduct(@PathVariable String id) {
 
         try(DaprClient daprClient = new DaprClientBuilder().build()) {
