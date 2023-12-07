@@ -1,6 +1,5 @@
 package dk.sdu.cart_service.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dk.sdu.cart_service.model.Reservation;
 import dk.sdu.cart_service.repository.CartRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,8 +11,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Objects;
-import java.util.Optional;
 
 
 @Service
@@ -38,15 +35,16 @@ public class CartService implements CartRepository{
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             System.out.println(stateStoreUrl);
-            System.out.println(response + " hello????");
+            System.out.println(response + " hello");
         } catch (IOException | InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
     @Override
-    public Optional<HttpResponse<String>> getState(String storeName, String id) throws URISyntaxException, IOException, InterruptedException {
+    public HttpResponse<String> getState(String storeName, String id) throws URISyntaxException, IOException, InterruptedException {
         URI baseUrl = new URI(DAPR_HOST+":"+DAPR_HTTP_PORT);
         URI getStateURL = new URI(baseUrl + "/v1.0/state/"+storeName+"/"+id);
+        System.out.println(getStateURL);
         httpClient = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .GET()
@@ -54,9 +52,8 @@ public class CartService implements CartRepository{
                 .build();
 
         var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println(getStateURL);
         System.out.println(response);
-        return Optional.of(Objects.requireNonNull(response));
+        return response;
     }
 
     @Override

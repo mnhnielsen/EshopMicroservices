@@ -13,10 +13,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.Objects;
-import java.util.Optional;
+import java.time.Duration;
 
 
 @RestController
@@ -26,6 +28,9 @@ public class CartController {
     public final String pubSubName = "kafka-commonpubsub";
     private static final Logger logger = LoggerFactory.getLogger(CartController.class);
     private final CartService cartService;
+    private final String DAPR_HOST = System.getenv().getOrDefault("DAPR_HOST", "http://localhost");
+    private final String DAPR_HTTP_PORT = System.getenv().getOrDefault("DAPR_HTTP_PORT", "3500");
+    private static HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     public CartController(CartService cartService) {
         this.cartService = cartService;
@@ -37,18 +42,21 @@ public class CartController {
         return "Connected to shopping cart";
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{customerId}")
     @ResponseStatus(HttpStatus.OK)
-    public Optional<Optional<HttpResponse<String>>> getReservation(@PathVariable String id, String storeName, Reservation reservation) {
-        try {
-            if (id.isEmpty()){
-                logger.info("there is no cart!!!!");
-            }
-            logger.info(id);
-            return Optional.of(Objects.requireNonNull(cartService.getState(storeName, reservation.customerId)));
-        } catch (URISyntaxException | IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+    public String getReservation(Reservation reservation, @PathVariable String customerId) throws URISyntaxException, IOException, InterruptedException {
+        customerId = reservation.getCustomerId();
+        URI baseUrl = new URI(DAPR_HOST+":"+DAPR_HTTP_PORT);
+        URI getStateURL = new URI(baseUrl + "/v1.0/state/"+redisStore+"/"+ customerId);
+        logger.info(baseUrl + "/v1.0/state/"+redisStore+"/"+ customerId);
+        HttpRequest request = HttpRequest.newBuilder()
+                .GET()
+                .uri(getStateURL)
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println("Order saved: "+ response.body());
+        return response.body();
     }
 
     @PostMapping(value = "/reserve")
@@ -97,6 +105,7 @@ public class CartController {
     private static byte[] reservationToJsonBytes(Reservation reservation) {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
+            logger.info(reservation.getCustomerId());
             return objectMapper.writeValueAsBytes(reservation);
         } catch (Exception e) {
             throw new RuntimeException("Error converting Reservation to JSON", e);
@@ -107,6 +116,7 @@ public class CartController {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             ReservationEvent reservationEvent = new ReservationEvent(customerId, quantity, productId);
+            logger.info(reservationEvent.getCustomerId() +' '+  reservationEvent.getProductId());
             return objectMapper.writeValueAsBytes(reservationEvent);
         } catch (Exception e) {
             throw new RuntimeException("Error converting ReservationEvent to JSON", e);
