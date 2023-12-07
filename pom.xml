@@ -15,11 +15,14 @@
 	<description>EshopMicroservices</description>
 	<properties>
 		<java.version>17</java.version>
+		<spring-cloud.version>2022.0.4</spring-cloud.version>
 	</properties>
 	<modules>
-		<module>cart_service</module>
+		<module>discovery-server</module>
 		<module>product_service</module>
+		<module>cart_service</module>
 		<module>inventory_service</module>
+		<module>api-gateway</module>
 	</modules>
 	<packaging>pom</packaging>
 	<dependencies>
@@ -69,7 +72,7 @@
 				<configuration>
 					<excludes>
 						<exclude>
-							<groupId>org.projectlombok</groupId>
+							<groupId>org.project-lombok</groupId>
 							<artifactId>lombok</artifactId>
 						</exclude>
 					</excludes>
