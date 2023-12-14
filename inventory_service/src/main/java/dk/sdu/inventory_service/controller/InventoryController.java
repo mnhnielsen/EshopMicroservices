@@ -4,6 +4,7 @@ import dk.sdu.inventory_service.dto.InventoryDto;
 import dk.sdu.inventory_service.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,18 +30,21 @@ public class InventoryController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('admin')")
     public void addProductToInventory (@RequestBody InventoryDto inventoryDto){
         inventoryService.addToInventory(inventoryDto);
     }
 
     @DeleteMapping("/delete/{id}")
     @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasRole('admin')")
     public void deleteProductFromInventory (@PathVariable String id){
         inventoryService.deleteFromInventory(id);
     }
 
     @PatchMapping("/edit/{id}")
     @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasRole('admin')")
     public void updateProduct(@PathVariable String id,@RequestBody InventoryDto inventoryDto){
         inventoryDto.setId(id);
         inventoryService.updateInventory(inventoryDto);

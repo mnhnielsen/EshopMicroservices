@@ -24,6 +24,11 @@ public class SecurityConfig {
     @Value("${eureka.password}")
     private String password;
 
+    @Value("${eureka.adminUsername}")
+    private String adminUsername;
+    @Value("${eureka.adminPassword}")
+    private String adminPassword;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf->csrf.ignoringRequestMatchers("/eureka/**"))
@@ -39,11 +44,16 @@ public class SecurityConfig {
         UserDetails user = User
                 .withUsername(username)
                 .password(passwordEncoder.encode(password))
-                .roles("USER")
+                .roles("user")
                 .build();
 
-        return new InMemoryUserDetailsManager(user);
+        UserDetails admin = User
+                .withUsername(adminUsername)
+                .password(passwordEncoder.encode(adminPassword))
+                .roles("admin")
+                .build();
+
+        return new InMemoryUserDetailsManager(user, admin);
+
     }
-
-
 }
