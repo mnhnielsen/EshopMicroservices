@@ -1,7 +1,11 @@
 package dk.sdu.cart_service.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dk.sdu.cart_service.model.Reservation;
+import dk.sdu.cart_service.model.ReservationEvent;
 import dk.sdu.cart_service.repository.CartRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -16,32 +20,21 @@ import java.time.Duration;
 @Service
 @RequiredArgsConstructor
 public class CartService implements CartRepository{
-
-    private final String DAPR_BASE_URL = "http://localhost:3500/v1.0";
     private final String DAPR_HOST = System.getenv().getOrDefault("DAPR_HOST", "http://localhost");
     private final String DAPR_HTTP_PORT = System.getenv().getOrDefault("DAPR_HTTP_PORT", "3500");
     private static HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
+    private final RedisTemplate<String, Object> redisTemplate;
+
     @Override
-    public void saveState(String storeName, byte[] data) throws URISyntaxException {
-        URI baseUrl = new URI(DAPR_HOST+":"+DAPR_HTTP_PORT);
-        URI stateStoreUrl = new URI(baseUrl + "/v1.0/state/"+ storeName);
-        try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            httpClient = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(stateStoreUrl)
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(data)))
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            System.out.println(stateStoreUrl);
-            System.out.println(response + " hello");
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+    public void saveState(Reservation reservation) {
+        redisTemplate.opsForList().leftPush(reservation.getCustomerId(),reservation.getItems());
+
+
     }
+
     @Override
-    public HttpResponse<String> getState(String storeName, String id) throws URISyntaxException, IOException, InterruptedException {
+    public void getState(String storeName, String id) throws URISyntaxException, IOException, InterruptedException {
         URI baseUrl = new URI(DAPR_HOST+":"+DAPR_HTTP_PORT);
         URI getStateURL = new URI(baseUrl + "/v1.0/state/"+storeName+"/"+id);
         System.out.println(getStateURL);
@@ -49,25 +42,27 @@ public class CartService implements CartRepository{
         HttpRequest request = HttpRequest.newBuilder()
                 .GET()
                 .uri(getStateURL)
+                .header("Content-Type", "application/json")
                 .build();
-
         var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println(response);
-        return response;
+        System.out.println(response.body()+response);
     }
 
     @Override
-    public void publishEvent(String pubSubName, String topic, byte[] data) throws Exception {
+    public void publishEvent(String pubSubName, String topic, ReservationEvent reservationEvent) throws Exception {
         String uri = DAPR_HOST + ":" + DAPR_HTTP_PORT + "/v1.0/publish/" + pubSubName + "/" + topic;
         ObjectMapper objectMapper = new ObjectMapper();
+//        JSONObject obj = new JSONObject();
+//        obj.put("customerId",reservationEvent.getCustomerId());
+        System.out.println(objectMapper.writeValueAsString(reservationEvent));
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(uri))
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(data)))
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(reservationEvent)))
                 .header("Content-Type", "application/json")
                 .build();
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println(uri);
-
+        System.out.println(request);
+        var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(uri+" "+response);
     }
 
 }

@@ -49,7 +49,6 @@ services:
     networks:
       - default
 
-
   eureka-server:
     image: springcloud/eureka
     container_name: eureka-server
@@ -57,9 +56,6 @@ services:
       - "8761:8761"
     networks:
       - default
-
-networks:
-  default:
 
   redis-cart_service:
     image: redis:7.2.3-alpine
@@ -84,8 +80,8 @@ networks:
     ports:
       - "8002:80"
     depends_on:
-      "kafka":
-        condition: service_healthy
+#      "kafka":
+#        condition: service_healthy
       "redis-cart_service":
         condition: service_healthy
 
@@ -110,9 +106,9 @@ networks:
       ]
     volumes:
       - "./dapr/:/dapr"
-    depends_on:
-      "kafka":
-        condition: service_healthy
+      #depends_on:
+#      "kafka":
+#        condition: service_healthy
 
-#networks:
-#  default:
+networks:
+  default:
