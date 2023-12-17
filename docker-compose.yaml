@@ -52,13 +52,19 @@ services:
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: orders
+      MYSQL_DATABASE: orderdb
       MYSQL_USER: admin
       MYSQL_PASSWORD: 888
+    ports:
+      - "3306:3306"
     expose:
-      - 3306
+      - "3306"
     volumes:
+#      - ./order-service/data:/var/lib/mysql
       - ./order-service/data:/docker-entrypoint-initdb.d
+    networks:
+    - default
+
 
   eureka-server:
     image: springcloud/eureka

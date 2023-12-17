@@ -17,7 +17,7 @@ public class Order {
     @Id
     public String orderId;
     public String customerId;
-    public String status;
+    public String orderStatus;
     @OneToMany(cascade = CascadeType.ALL)
     public List<OrderProduct> orderProducts;
 }

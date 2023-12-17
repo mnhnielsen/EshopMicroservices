@@ -12,7 +12,7 @@ import java.util.List;
 public class OrderDto {
     public String orderId;
     public String customerId;
-    public String status;
+    public String orderStatus;
     public List<OrderProduct> orderProducts;
 
 }

@@ -12,7 +12,7 @@ public class OrderDtoMapper implements Function<Order, OrderDto> {
     public OrderDto apply(Order order) {
         return new OrderDto(order.getOrderId(),
                 order.getCustomerId(),
-                order.getStatus(),
+                order.getOrderStatus(),
                 order.getOrderProducts());
     }
 }
