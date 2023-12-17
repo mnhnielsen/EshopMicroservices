@@ -66,7 +66,6 @@ public class CartController {
             if (result == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
-
             daprClient.deleteState(redisStore,id).block();
             logger.info("Deleting product: " + id);
 

@@ -13,9 +13,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableAsync
 //@EnableDiscoveryClient
 public class CartServiceApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(CartServiceApplication.class, args);
     }
-
 }

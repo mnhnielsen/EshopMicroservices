@@ -68,6 +68,19 @@ services:
       timeout: 5s
       retries: 5
 
+  keykloak:
+    image: keycloak:latest
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+      KEYCLOAK_LOGLEVEL: INFO
+      ROOT_LOGLEVEL: INFO
+    ports:
+      - '8787:8787'
+      - '8181:8181'
+    command:
+      - start-dev
+
   zipkin:
     image: "openzipkin/zipkin"
     ports:
@@ -106,9 +119,9 @@ services:
       ]
     volumes:
       - "./dapr/:/dapr"
-      #depends_on:
-#      "kafka":
-#        condition: service_healthy
+    depends_on:
+      "kafka":
+        condition: service_healthy
 
 networks:
   default:
