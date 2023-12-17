@@ -47,6 +47,18 @@ services:
     networks:
       - default
 
+  mysql_order_service:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orders
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: 888
+    expose:
+      - 3306
+    volumes:
+      - ./order-service/data:/docker-entrypoint-initdb.d
 
   eureka-server:
     image: springcloud/eureka
@@ -55,9 +67,6 @@ services:
       - "8761:8761"
     networks:
       - default
-
-networks:
-  default:
 
   redis-cart_service:
     image: redis:7.2.3-alpine
@@ -112,5 +121,5 @@ networks:
       "kafka-broker":
         condition: service_healthy
 
-#networks:
-#  default:
+networks:
+  default:
