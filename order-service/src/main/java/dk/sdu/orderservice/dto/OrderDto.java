@@ -14,5 +14,4 @@ public class OrderDto {
     public String customerId;
     public String orderStatus;
     public List<OrderProduct> orderProducts;
-
 }

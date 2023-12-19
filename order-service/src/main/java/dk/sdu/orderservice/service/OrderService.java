@@ -2,13 +2,13 @@ package dk.sdu.orderservice.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dk.sdu.orderservice.dto.CancelOrderDto;
-import dk.sdu.orderservice.dto.OrderDto;
-import dk.sdu.orderservice.dto.OrderProductDto;
-import dk.sdu.orderservice.dto.PaymentDto;
+import dk.sdu.orderservice.dto.*;
+import dk.sdu.orderservice.mapper.CustomerDtoMapper;
 import dk.sdu.orderservice.mapper.OrderDtoMapper;
+import dk.sdu.orderservice.model.Customer;
 import dk.sdu.orderservice.model.Order;
 import dk.sdu.orderservice.model.OrderProduct;
+import dk.sdu.orderservice.repository.CustomerRepository;
 import dk.sdu.orderservice.repository.OrderProductRepository;
 import dk.sdu.orderservice.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +23,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -31,31 +32,29 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderProductRepository orderProductRepository;
     private final OrderDtoMapper orderDtoMapper;
+    private final CustomerRepository customerRepository;
+    private final CustomerDtoMapper customerDtoMapper;
 
     private final String DAPR_HOST = System.getenv().getOrDefault("DAPR_HOST", "http://localhost");
-    private final String DAPR_HTTP_PORT = System.getenv().getOrDefault("DAPR_HTTP_PORT", "3500");
-    private static HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    private final String DAPR_HTTP_PORT = System.getenv().getOrDefault("DAPR_HTTP_PORT", "3400");
+    private static final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
 
 
-    public Optional<OrderDto> getOrder(String id) {
-        try {
-            var order = orderRepository.findById(id);
-
-            if (order.isPresent()) {
-                return order.map(orderDtoMapper);
-            } else {
-                return Optional.empty();
-            }
-        } catch (Exception e) {
-            log.error("Error retrieving order: {}", e.getMessage(), e);
-            throw new RuntimeException("Error retrieving order", e);
-        }
+    public CompletableFuture<Optional<OrderDto>> getOrder(String id) {
+        return CompletableFuture.supplyAsync(() -> orderRepository.findById(id)
+                .map(orderDtoMapper::map)).exceptionally(ex -> {
+            // Log the exception and handle it
+            log.error("Error retrieving order with ID {}: {}", id, ex.getMessage(), ex);
+            // Return an empty Optional to indicate failure in retrieving the order
+            return Optional.empty();
+        });
     }
 
-    public void addOrder(OrderDto orderDto) {
+
+    public CompletableFuture<OrderDto> addOrder(OrderDto orderDto) {
         if (orderDto == null || orderDto.getOrderId() == null || orderDto.getCustomerId() == null || orderDto.getOrderProducts() == null) {
-            log.error("Invalid OrderDto: {}", orderDto);
+            log.error("Invalid Order: {}", orderDto);
             throw new IllegalArgumentException("Invalid OrderDto: One or more required fields are null");
         }
         try {
@@ -68,6 +67,7 @@ public class OrderService {
 
             orderRepository.save(order);
             log.info("Saved order {}", order.getOrderId());
+            return CompletableFuture.completedFuture(orderDto);
         } catch (Exception e) {
             log.error("Error saving order: {}", e.getMessage(), e);
             throw new RuntimeException("Error saving order", e);
@@ -117,6 +117,21 @@ public class OrderService {
         return orderRepository.existsById(orderId);
     }
 
+    public void addCustomer(CustomerDto customerDto) {
+        try {
+            Customer customer = Customer.builder()
+                    .name(customerDto.getName())
+                    .email(customerDto.getEmail())
+                    .address(customerDto.getAddress())
+                    .build();
+            customerRepository.save(customer);
+            log.info("Saved customer {}", customerDto.getEmail());
+        } catch (Exception e) {
+            log.error("Error saving customer: {}", e.getMessage(), e);
+            throw new RuntimeException("Error saving customer", e);
+        }
+    }
+
     public <T> void publishEvent(String pubSubName, String topic, T payload) {
         try {
             String uri = DAPR_HOST + ":" + DAPR_HTTP_PORT + "/v1.0/publish/" + pubSubName + "/" + topic;
@@ -143,6 +158,4 @@ public class OrderService {
             System.err.println("Error sending HTTP request: " + e.getMessage());
         }
     }
-
-
 }
