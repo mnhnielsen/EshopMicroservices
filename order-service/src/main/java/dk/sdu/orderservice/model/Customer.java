@@ -1,8 +1,6 @@
 package dk.sdu.orderservice.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 
 @Getter
@@ -15,6 +13,8 @@ import lombok.*;
 @Table(name = "Customers")
 public class Customer {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    public int id;
     public String customerId;
     public String name;
     public String email;

@@ -147,7 +147,7 @@ public class OrderService {
             System.out.println(request);
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            if (response.statusCode() == HttpStatus.OK.value()) {
+            if (response.statusCode() == HttpStatus.OK.value() || response.statusCode() == HttpStatus.NO_CONTENT.value()) {
                 System.out.println(uri + " " + response.body());
             } else {
                 System.err.println("Failed to publish event. Status code: " + response.statusCode());

@@ -1,10 +1,8 @@
 package dk.sdu.orderservice.controller;
 
-import dk.sdu.orderservice.dto.CustomerDto;
-import dk.sdu.orderservice.dto.OrderDto;
-import dk.sdu.orderservice.dto.OrderProductDto;
-import dk.sdu.orderservice.dto.PaymentDto;
+import dk.sdu.orderservice.dto.*;
 import dk.sdu.orderservice.mapper.OrderDtoMapper;
+import dk.sdu.orderservice.model.Order;
 import dk.sdu.orderservice.service.OrderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,16 +12,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @Slf4j
 @RequestMapping("api/order")
 public class OrderController {
     private final OrderService orderService;
+    private final OrderDtoMapper orderDtoMapper;
     private final String pubSubName = "kafka-pubsub";
     @Autowired
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, OrderDtoMapper orderDtoMapper) {
         this.orderService = orderService;
+        this.orderDtoMapper = orderDtoMapper;
     }
 
     @GetMapping(value = "/status")
@@ -67,6 +68,7 @@ public class OrderController {
                                     return ResponseEntity.ok().build();
                                 });
                     } else {
+                        log.info("Order not found :{} ", orderId);
                         return CompletableFuture.completedFuture(ResponseEntity.notFound().build());
                     }
                 })
@@ -84,7 +86,28 @@ public class OrderController {
 
     @DeleteMapping(value = "/delete/{orderId}")
     public ResponseEntity<Void> deleteOrder(@PathVariable String orderId) {
-        orderService.deleteOrder(orderId);
-        return new ResponseEntity<>(HttpStatus.OK);
+        try {
+            if (!orderService.orderExists(orderId)) {
+                log.info("Order with ID {} not found. Unable to delete.", orderId);
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
+            var orderToDelete = orderService.getOrder(orderId);
+            if (orderToDelete == null) {
+                log.info("Order with ID {} not found. Unable to delete.", orderId);
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
+            var res = orderDtoMapper.map(null);
+            //orderToDelete.get().get()
+            orderService.deleteOrder(orderId);
+            for (var item : res.getOrderProducts()) {
+                var cancelOrder = new CancelOrderDto(orderId, res.getCustomerId(), item.getQuantity());
+                orderService.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder);
+            }
+            log.info("Order with ID {} deleted successfully.", orderId);
+            return new ResponseEntity<>(HttpStatus.OK);
+        } catch (Exception e) {
+            log.error("Error while deleting order with ID {}: {}", orderId, e.getMessage(), e);
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 }

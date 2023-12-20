@@ -10,5 +10,5 @@ import lombok.NoArgsConstructor;
 public class CancelOrderDto {
     public String orderId;
     public String customerId;
-    public String orderStatus;
+    public int quantity;
 }
