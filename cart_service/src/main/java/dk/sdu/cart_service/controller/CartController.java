@@ -9,13 +9,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.function.client.WebClient;
+
 import java.io.IOException;
 import java.net.URISyntaxException;
 
 @RestController
 @RequestMapping("api/cart")
 public class CartController {
-    public final String redisStore = "cart-store";
     public final String pubSubName = "kafka-pubsub";
     private static final Logger logger = LoggerFactory.getLogger(CartController.class);
     private final CartService cartService;
@@ -30,22 +31,23 @@ public class CartController {
         return "Connected to shopping cart";
     }
 
-    @GetMapping("/reserve/{customerId}")
+    @GetMapping("/{customerId}")
     @ResponseStatus(HttpStatus.OK)
     public void getReservation(@PathVariable String customerId) throws URISyntaxException, IOException, InterruptedException {
-        cartService.getState(redisStore,customerId);
+        cartService.getCart(customerId);
     }
 
     @PostMapping(value = "/reserve")
     @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) {
+    public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation, String id) {
         try {
             if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
-            cartService.saveState(reservation);
+            cartService.saveReservation(id,reservation);
             for (var item : reservation.getItems()) {
-                cartService.publishEvent(pubSubName, "On_Products_Reserved", new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId()));
+                ReservationEvent reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
+                cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent);
                 logger.info("product added: " + item.getProductId());
             }
             logger.info("state added for user: " + reservation.getCustomerId());

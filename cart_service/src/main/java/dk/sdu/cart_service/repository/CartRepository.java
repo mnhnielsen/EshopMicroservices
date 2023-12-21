@@ -9,5 +9,4 @@ import java.net.URISyntaxException;
 public interface CartRepository {
     void saveState(Reservation reservation) throws Exception;
     void getState(String storeName, String id) throws URISyntaxException, IOException, InterruptedException;
-    void publishEvent(String pubSubName, String topic, ReservationEvent reservationEvent) throws Exception;
 }
