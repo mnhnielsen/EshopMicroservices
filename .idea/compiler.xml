@@ -15,8 +15,7 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="api-gateway" target="17" />
-      <module name="discovery-server" target="17" />
+      <module name="order-service" target="17" />
     </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">

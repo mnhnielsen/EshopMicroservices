@@ -3,8 +3,6 @@ package dk.sdu.cart_service.controller;
 import dk.sdu.cart_service.model.Reservation;
 import dk.sdu.cart_service.model.ReservationEvent;
 import dk.sdu.cart_service.service.CartService;
-import io.dapr.client.DaprClient;
-import io.dapr.client.DaprClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,28 +55,28 @@ public class CartController {
         }
     }
 
-    @DeleteMapping(value = "/removeProduct/{id}")
-    @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<String> removeProduct(@PathVariable String id) {
-
-        try(DaprClient daprClient = new DaprClientBuilder().build()) {
-            var result = daprClient.getState(redisStore,id,Reservation.class).block();
-            if (result == null) {
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-            }
-            daprClient.deleteState(redisStore,id).block();
-            logger.info("Deleting product: " + id);
-
-            for (var item : result.getValue().items ) {
-                var reservationEvent = new ReservationEvent(result.getValue().customerId, item.getQuantity(), item.getProductId());
-                daprClient.publishEvent(pubSubName, "On_Products_Removed_Cart",reservationEvent).block();
-            }
-            return new ResponseEntity<>(HttpStatus.OK);
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+//    @DeleteMapping(value = "/removeProduct/{id}")
+//    @ResponseStatus(HttpStatus.OK)
+//    public ResponseEntity<String> removeProduct(@PathVariable String id) {
+//
+//        try(DaprClient daprClient = new DaprClientBuilder().build()) {
+//            var result = daprClient.getState(redisStore,id,Reservation.class).block();
+//            if (result == null) {
+//                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+//            }
+//            daprClient.deleteState(redisStore,id).block();
+//            logger.info("Deleting product: " + id);
+//
+//            for (var item : result.getValue().items ) {
+//                var reservationEvent = new ReservationEvent(result.getValue().customerId, item.getQuantity(), item.getProductId());
+//                daprClient.publishEvent(pubSubName, "On_Products_Removed_Cart",reservationEvent).block();
+//            }
+//            return new ResponseEntity<>(HttpStatus.OK);
+//
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 }
 
 
