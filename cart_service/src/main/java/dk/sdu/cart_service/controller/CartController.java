@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -33,24 +34,36 @@ public class CartController {
 
     @GetMapping("/{customerId}")
     @ResponseStatus(HttpStatus.OK)
-    public void getReservation(@PathVariable String customerId) throws URISyntaxException, IOException, InterruptedException {
-        cartService.getCart(customerId);
+    public ResponseEntity<Object> getReservation(@PathVariable String customerId) throws URISyntaxException, IOException, InterruptedException {
+        try {
+            var res = cartService.getCart(customerId);
+            if (res.isPresent()) {
+                return ResponseEntity.ok().body(res);
+            } else {
+                logger.info("No reservation found for customer: " + customerId);
+                return ResponseEntity.notFound().build();
+            }
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Customer ID", e);
+        } catch (RuntimeException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error accessing data", e);
+        }
     }
 
     @PostMapping(value = "/reserve")
     @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation, String id) {
+    public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) {
         try {
             if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
-            cartService.saveReservation(id,reservation);
+            cartService.addReservation(reservation);
             for (var item : reservation.getItems()) {
                 ReservationEvent reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
                 cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent);
                 logger.info("product added: " + item.getProductId());
             }
-            logger.info("state added for user: " + reservation.getCustomerId());
+            logger.info("item added for user: " + reservation.getCustomerId());
             return new ResponseEntity<>(HttpStatus.CREATED);
         } catch (Exception e) {
             throw new RuntimeException(e);
