@@ -19,4 +19,7 @@ public class Customer {
     public String name;
     public String email;
     public String address;
+
+    public Customer(String customerId, String name, String email, String address) {
+    }
 }

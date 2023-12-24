@@ -44,9 +44,7 @@ public class OrderService {
     public CompletableFuture<Optional<OrderDto>> getOrder(String id) {
         return CompletableFuture.supplyAsync(() -> orderRepository.findById(id)
                 .map(orderDtoMapper::map)).exceptionally(ex -> {
-            // Log the exception and handle it
             log.error("Error retrieving order with ID {}: {}", id, ex.getMessage(), ex);
-            // Return an empty Optional to indicate failure in retrieving the order
             return Optional.empty();
         });
     }
@@ -117,7 +115,7 @@ public class OrderService {
         return orderRepository.existsById(orderId);
     }
 
-    public void addCustomer(CustomerDto customerDto) {
+    public void addCustomer(Customer customerDto) {
         try {
             Customer customer = Customer.builder()
                     .name(customerDto.getName())

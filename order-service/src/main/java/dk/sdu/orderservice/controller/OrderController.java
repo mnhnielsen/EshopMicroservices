@@ -2,8 +2,11 @@ package dk.sdu.orderservice.controller;
 
 import dk.sdu.orderservice.dto.*;
 import dk.sdu.orderservice.mapper.OrderDtoMapper;
+import dk.sdu.orderservice.model.Customer;
+import dk.sdu.orderservice.model.Order;
 import dk.sdu.orderservice.service.OrderService;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +38,7 @@ public class OrderController {
     public CompletableFuture<Optional<OrderDto>> getOrder(@PathVariable String orderId) {
         var res = orderService.getOrder(orderId);
         System.out.println(res);
+        Hibernate.initialize(res);
         return ResponseEntity.ok().body(res).getBody();
     }
 
@@ -44,37 +48,40 @@ public class OrderController {
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
-    @PostMapping("/submit/{orderId}")
-    public CompletableFuture<ResponseEntity<Object>> submitOrder(@PathVariable String orderId, @RequestBody CustomerDto customer) {
-        return orderService.getOrder(orderId)
-                .thenCompose(optionalOrderDto -> {
-                    if (optionalOrderDto.isPresent()) {
-                        OrderDto orderDto = optionalOrderDto.get();
-                        orderDto.setOrderStatus("Reserved");
-                        log.info(orderDto.getOrderStatus());
-
-                        var customerToSave = new CustomerDto(customer.getName(), customer.getEmail(), customer.getAddress());
-                        log.info(String.valueOf(customerToSave));
-                        orderService.addCustomer(customerToSave);
-
-                        return orderService.addOrder(orderDto)
-                                .thenApply(finalOrderDto -> {
-                                    var result = new PaymentDto(finalOrderDto.getCustomerId(), finalOrderDto.getOrderId(), finalOrderDto.getOrderStatus());
-                                    log.info("ORDER SUBMITTED");
-                                    orderService.publishEvent(pubSubName, "On_Order_Submit", result);
-                                    log.info("Sending order to pubsub: {}", result);
-                                    return ResponseEntity.ok().build();
-                                });
-                    } else {
-                        log.info("Order not found :{} ", orderId);
-                        return CompletableFuture.completedFuture(ResponseEntity.notFound().build());
+    @PostMapping("submit/{id}")
+    public CompletableFuture<ResponseEntity<Object>> submitOrder(@PathVariable String id, @RequestBody CustomerDto customer) {
+        return orderService.getOrder(id)
+                .thenApply(order -> {
+                    if (order.isEmpty()) {
+                        throw new IllegalStateException("Order not found");
                     }
+                    var finalOrder = new Order();
+                    orderDtoMapper.map(finalOrder); // Map from DTO to entity
+                    finalOrder.setOrderStatus("Reserved");
+                    log.info("Order {} {} {}", finalOrder.getOrderId(), finalOrder.getCustomerId() ,finalOrder.getOrderStatus());
+
+                    var customerToSave = new Customer(finalOrder.getCustomerId(), customer.getName(), customer.getEmail(), customer.getAddress());
+                    log.info("Customer: {}", customerToSave);
+                    if (finalOrder.getOrderId() == null || customerToSave.getName() == null || customerToSave.getEmail() == null || customerToSave.getAddress() == null) {
+                        log.error("Invalid Customer: {}", customerToSave);
+                        throw new IllegalArgumentException("Invalid CustomerDto: One or more required fields are null");
+                    }
+                    orderService.addCustomer(customerToSave);
+                    return finalOrder;
+                })
+                .thenApply(saved -> {
+                    var result = new PaymentDto(saved.getCustomerId(), saved.getOrderId(), saved.getOrderStatus());
+                    orderService.publishEvent(pubSubName, "On_Order_Submit", result);
+                    log.info("ORDER SUBMITTED");
+
+                    return ResponseEntity.ok().build();
                 })
                 .exceptionally(ex -> {
                     log.error("Error processing order submission: {}", ex.getMessage(), ex);
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
                 });
     }
+
 
     @PostMapping("/add/{orderId}")
     public ResponseEntity<Void> addProductToOrder(@PathVariable String orderId, @RequestBody OrderProductDto orderProductDto) {
@@ -83,29 +90,26 @@ public class OrderController {
     }
 
     @DeleteMapping(value = "/delete/{orderId}")
-    public ResponseEntity<Void> deleteOrder(@PathVariable String orderId) {
-        try {
-            if (!orderService.orderExists(orderId)) {
-                log.info("Order with ID {} not found. Unable to delete.", orderId);
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-            }
-            var orderToDelete = orderService.getOrder(orderId);
-            if (orderToDelete == null) {
-                log.info("Order with ID {} not found. Unable to delete.", orderId);
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-            }
-            var res = orderDtoMapper.map(null);
-            //orderToDelete.get().get()
-            orderService.deleteOrder(orderId);
-            for (var item : res.getOrderProducts()) {
-                var cancelOrder = new CancelOrderDto(orderId, res.getCustomerId(), item.getQuantity());
-                orderService.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder);
-            }
-            log.info("Order with ID {} deleted successfully.", orderId);
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (Exception e) {
-            log.error("Error while deleting order with ID {}: {}", orderId, e.getMessage(), e);
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+    public CompletableFuture<ResponseEntity<Object>> deleteOrder(@PathVariable String orderId) {
+        return orderService.getOrder(orderId)
+                .thenCompose(orderToDeleteDto -> {
+                    if (orderToDeleteDto.isEmpty()) {
+                        log.info("Order with ID {} not found. Unable to delete.", orderId);
+                        return CompletableFuture.completedFuture(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+                    }
+                    Order order = new Order();
+                    orderToDeleteDto = Optional.ofNullable(orderDtoMapper.map(order));
+                    orderService.deleteOrder(orderId);
+                    for (var item : orderToDeleteDto.get().getOrderProducts()) {
+                        var cancelOrder = new CancelOrderDto(orderId, orderToDeleteDto.get().getCustomerId(), item.getQuantity());
+                        orderService.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder);
+                    }
+                    log.info("Order with ID {} deleted successfully.", orderId);
+                    return CompletableFuture.completedFuture(new ResponseEntity<>(HttpStatus.OK));
+                })
+                .exceptionally(ex -> {
+                    log.error("Error while deleting order with ID {}: {}", orderId, ex.getMessage(), ex);
+                    return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+                });
     }
 }

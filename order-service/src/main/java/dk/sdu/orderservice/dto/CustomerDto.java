@@ -1,5 +1,6 @@
 package dk.sdu.orderservice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 @Getter
@@ -8,7 +9,13 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 public class CustomerDto {
-    public String name;
-    public String email;
-    public String address;
+    @JsonProperty("name")
+    private String name;
+
+    @JsonProperty("email")
+    private String email;
+
+    @JsonProperty("address")
+    private String address;
+
 }

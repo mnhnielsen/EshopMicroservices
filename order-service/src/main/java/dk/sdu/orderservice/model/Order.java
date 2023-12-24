@@ -1,10 +1,11 @@
 package dk.sdu.orderservice.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jdk.jfr.Timestamp;
 import lombok.*;
+import org.hibernate.FetchMode;
 import org.hibernate.annotations.Fetch;
-import org.hibernate.annotations.FetchMode;
 
 import java.util.List;
 
@@ -20,6 +21,6 @@ public class Order {
     public String orderId;
     public String customerId;
     public String orderStatus;
-    @OneToMany @Fetch(FetchMode.JOIN)
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER, mappedBy = "orderId")
     public List<OrderProduct> orderProducts;
 }
