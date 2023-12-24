@@ -9,11 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("api/cart")
@@ -36,8 +36,8 @@ public class CartController {
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<Object> getReservation(@PathVariable String customerId) throws URISyntaxException, IOException, InterruptedException {
         try {
-            var res = cartService.getCart(customerId);
-            if (res.isPresent()) {
+            var res = cartService.getCartById(customerId);
+            if (res == null) {
                 return ResponseEntity.ok().body(res);
             } else {
                 logger.info("No reservation found for customer: " + customerId);
@@ -50,6 +50,13 @@ public class CartController {
         }
     }
 
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public Reservation addReservation(@RequestBody Reservation reservation) {
+        cartService.saveReservation(reservation);
+        return cartService.getCartById(reservation.getCustomerId());
+    }
+
     @PostMapping(value = "/reserve")
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) {
@@ -57,7 +64,7 @@ public class CartController {
             if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
-            cartService.addReservation(reservation);
+            cartService.saveReservation(reservation);
             for (var item : reservation.getItems()) {
                 ReservationEvent reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
                 cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent);
@@ -70,28 +77,23 @@ public class CartController {
         }
     }
 
-//    @DeleteMapping(value = "/removeProduct/{id}")
-//    @ResponseStatus(HttpStatus.OK)
-//    public ResponseEntity<String> removeProduct(@PathVariable String id) {
-//
-//        try(DaprClient daprClient = new DaprClientBuilder().build()) {
-//            var result = daprClient.getState(redisStore,id,Reservation.class).block();
-//            if (result == null) {
-//                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-//            }
-//            daprClient.deleteState(redisStore,id).block();
-//            logger.info("Deleting product: " + id);
-//
-//            for (var item : result.getValue().items ) {
-//                var reservationEvent = new ReservationEvent(result.getValue().customerId, item.getQuantity(), item.getProductId());
-//                daprClient.publishEvent(pubSubName, "On_Products_Removed_Cart",reservationEvent).block();
-//            }
-//            return new ResponseEntity<>(HttpStatus.OK);
-//
-//        } catch (Exception e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
+    @PostMapping(value = "/checkout/{customerId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> checkout(@PathVariable String customerId) {
+        try {
+            var res = cartService.getCartById(customerId);
+            if (res == null) {
+                logger.info("No reservation found for: {}", customerId);
+                return ResponseEntity.notFound().build();
+            }
+            cartService.publishEvent(pubSubName, "On_Reservation_Completed", res);
+            logger.info("Reservation completed for: {}", customerId);
+            return ResponseEntity.ok().body(String.valueOf(res.getCustomerId()));
+        } catch (Exception e) {
+            logger.error("Error checking out reservation: {}", e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
 }
 
 

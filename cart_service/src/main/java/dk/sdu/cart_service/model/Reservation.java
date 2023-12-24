@@ -13,8 +13,8 @@ import java.util.List;
 @Getter
 @Setter
 @AllArgsConstructor
-@Builder
 @RedisHash("Reservation")
+@Builder
 public class Reservation implements Serializable {
     @Id
     public String customerId;
