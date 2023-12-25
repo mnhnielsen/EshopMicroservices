@@ -10,7 +10,7 @@ import java.io.Serializable;
 @Setter
 @AllArgsConstructor
 public class Item implements Serializable {
-    public int quantity;
-    public double price;
-    public String productId;
+    private int quantity;
+    private double price;
+    private String productId;
 }

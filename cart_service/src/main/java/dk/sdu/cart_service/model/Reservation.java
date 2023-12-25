@@ -17,6 +17,6 @@ import java.util.List;
 @Builder
 public class Reservation implements Serializable {
     @Id
-    public String customerId;
-    public List<Item> items;
+    private String customerId;
+    private List<Item> items;
 }

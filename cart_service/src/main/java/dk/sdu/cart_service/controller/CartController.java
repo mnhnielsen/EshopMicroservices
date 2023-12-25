@@ -35,14 +35,17 @@ public class CartController {
     @GetMapping("/{customerId}")
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<Object> getReservation(@PathVariable String customerId) throws URISyntaxException, IOException, InterruptedException {
+        if (customerId == null || customerId.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer ID cannot be null or empty");
+        }
         try {
-            var res = cartService.getCartById(customerId);
+            Reservation res = cartService.getCartById(customerId);
             if (res == null) {
-                return ResponseEntity.ok().body(res);
-            } else {
-                logger.info("No reservation found for customer: " + customerId);
+                logger.info("No reservation found for: {}", customerId);
                 return ResponseEntity.notFound().build();
             }
+            logger.info(res.getCustomerId());
+            return ResponseEntity.ok().body(res);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Customer ID", e);
         } catch (RuntimeException e) {
@@ -54,7 +57,50 @@ public class CartController {
     @ResponseStatus(HttpStatus.CREATED)
     public Reservation addReservation(@RequestBody Reservation reservation) {
         cartService.saveReservation(reservation);
-        return cartService.getCartById(reservation.getCustomerId());
+        var res = cartService.getCartById(reservation.getCustomerId());
+        logger.info("Reservation created for: {}", reservation.getCustomerId());
+        return res;
+    }
+
+    @PutMapping(value = "/{customerId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> updateCart(@PathVariable String customerId, @RequestBody Reservation reservation) {
+        try {
+            var res = cartService.getCartById(customerId);
+            if (res == null) {
+                logger.info("No reservation found for: {}", customerId);
+                return ResponseEntity.notFound().build();
+            }
+            cartService.saveReservation(reservation);
+            logger.info("Reservation updated for: {}", customerId);
+            return ResponseEntity.ok().body(String.valueOf(res.getCustomerId()));
+        } catch (Exception e) {
+            logger.error("Error updating reservation: {}", e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    @DeleteMapping(value = "/{customerId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> removeReservation(@PathVariable String customerId) {
+        try {
+            var res = cartService.getCartById(customerId);
+            if (res == null) {
+                logger.info("No reservation found for: {}", customerId);
+                return ResponseEntity.notFound().build();
+            }
+            cartService.removeCart(res.getCustomerId());
+            logger.info("Reservation deleted for: {}", customerId);
+            for (var item : res.getItems()) {
+                ReservationEvent reservationEvent = new ReservationEvent(res.getCustomerId(), item.getQuantity(), item.getProductId());
+                cartService.publishEvent(pubSubName, "On_Products_Released", reservationEvent);
+                logger.info("product removed: " + item.getProductId());
+            }
+            return ResponseEntity.ok().body(String.valueOf(customerId));
+        } catch (Exception e) {
+            logger.error("Error deleting reservation: {}", e.getMessage());
+            throw new RuntimeException(e);
+        }
     }
 
     @PostMapping(value = "/reserve")

@@ -8,7 +8,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 public class ReservationEvent {
-    public String customerId;
-    public int quantity;
-    public String ProductId;
+    private String customerId;
+    private int quantity;
+    private String ProductId;
 }

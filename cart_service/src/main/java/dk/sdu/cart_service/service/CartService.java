@@ -62,7 +62,23 @@ public class CartService {
             log.error("Error saving reservation {}", e.getMessage());
             throw new RuntimeException("Error saving reservation", e);
         }
+    }
 
+    public void removeCart(String customerId) {
+        if (customerId == null || customerId.trim().isEmpty()) {
+            log.error("Customer ID is null or empty");
+            throw new IllegalArgumentException("Customer ID cannot be null or empty");
+        }
+        try {
+            Reservation res = (Reservation) redisTemplate.opsForHash().get(HASH_KEY, customerId);
+            if (res != null) {
+                redisTemplate.opsForHash().delete(HASH_KEY, customerId, res);
+                log.info("Reservation deleted: {}", res);
+            }
+        } catch (DataAccessException e) {
+            log.error("Error accessing Redis repository", e);
+            throw new RuntimeException("Error retrieving data from Redis", e);
+        }
     }
 
     public <T> void publishEvent(String pubSubName, String topic, T payload) {
