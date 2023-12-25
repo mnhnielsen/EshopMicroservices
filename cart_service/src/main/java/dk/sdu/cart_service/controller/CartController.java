@@ -2,26 +2,29 @@ package dk.sdu.cart_service.controller;
 
 import dk.sdu.cart_service.model.Reservation;
 import dk.sdu.cart_service.model.ReservationEvent;
-import io.dapr.client.DaprClient;
-import io.dapr.client.DaprClientBuilder;
+import dk.sdu.cart_service.service.CartService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Objects;
+import java.io.IOException;
+import java.net.URISyntaxException;
 import java.util.Optional;
-
 
 @RestController
 @RequestMapping("api/cart")
 public class CartController {
-    public final String redisStore = "cart-store";
-    public final String pubSubName = "kafka-commonpubsub";
+    public final String pubSubName = "kafka-pubsub";
     private static final Logger logger = LoggerFactory.getLogger(CartController.class);
+    private final CartService cartService;
+    @Autowired
+    public CartController(CartService cartService) {
+        this.cartService = cartService;
+    }
 
     @GetMapping(value = "/status")
     @ResponseStatus(HttpStatus.OK)
@@ -29,63 +32,111 @@ public class CartController {
         return "Connected to shopping cart";
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{customerId}")
     @ResponseStatus(HttpStatus.OK)
-    public Optional<Reservation> getBasket(@PathVariable String id) {
-        try (DaprClient daprClient = new DaprClientBuilder().build()) {
-            var result = daprClient.getState(redisStore,id,Reservation.class);
-            if (result == null) {
-                throw new IllegalArgumentException("no items in basket");
+    public ResponseEntity<Object> getReservation(@PathVariable String customerId) throws URISyntaxException, IOException, InterruptedException {
+        if (customerId == null || customerId.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer ID cannot be null or empty");
+        }
+        try {
+            Reservation res = cartService.getCartById(customerId);
+            if (res == null) {
+                logger.info("No reservation found for: {}", customerId);
+                return ResponseEntity.notFound().build();
             }
-            return Optional.ofNullable(Objects.requireNonNull(result.block()).getValue());
+            logger.info(res.getCustomerId());
+            return ResponseEntity.ok().body(res);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Customer ID", e);
+        } catch (RuntimeException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error accessing data", e);
+        }
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public Reservation addReservation(@RequestBody Reservation reservation) {
+        cartService.saveReservation(reservation);
+        var res = cartService.getCartById(reservation.getCustomerId());
+        logger.info("Reservation created for: {}", reservation.getCustomerId());
+        return res;
+    }
+
+    @PutMapping(value = "/{customerId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> updateCart(@PathVariable String customerId, @RequestBody Reservation reservation) {
+        try {
+            var res = cartService.getCartById(customerId);
+            if (res == null) {
+                logger.info("No reservation found for: {}", customerId);
+                return ResponseEntity.notFound().build();
+            }
+            cartService.saveReservation(reservation);
+            logger.info("Reservation updated for: {}", customerId);
+            return ResponseEntity.ok().body(String.valueOf(res.getCustomerId()));
         } catch (Exception e) {
+            logger.error("Error updating reservation: {}", e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    @DeleteMapping(value = "/{customerId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> removeReservation(@PathVariable String customerId) {
+        try {
+            var res = cartService.getCartById(customerId);
+            if (res == null) {
+                logger.info("No reservation found for: {}", customerId);
+                return ResponseEntity.notFound().build();
+            }
+            cartService.removeCart(res.getCustomerId());
+            logger.info("Reservation deleted for: {}", customerId);
+            for (var item : res.getItems()) {
+                ReservationEvent reservationEvent = new ReservationEvent(res.getCustomerId(), item.getQuantity(), item.getProductId());
+                cartService.publishEvent(pubSubName, "On_Products_Released", reservationEvent);
+                logger.info("product removed: " + item.getProductId());
+            }
+            return ResponseEntity.ok().body(String.valueOf(customerId));
+        } catch (Exception e) {
+            logger.error("Error deleting reservation: {}", e.getMessage());
             throw new RuntimeException(e);
         }
     }
 
     @PostMapping(value = "/reserve")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<String> addProductToBasket(@RequestBody(required = false) Reservation reservation)
-    {
-        try(DaprClient daprClient = new DaprClientBuilder().build()){
-
-            if (reservation == null || reservation.getItems().isEmpty()) {
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) {
+        try {
+            if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
-
-            daprClient.saveState(redisStore,reservation.getCustomerId(), Reservation.class).block();
-            for (var item: reservation.getItems()) {
-                var reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
-                logger.info(item.getProductId() + " Has been saved");
-                daprClient.publishEvent(pubSubName,"On_Products_Reserved",reservationEvent).block();
+            cartService.saveReservation(reservation);
+            for (var item : reservation.getItems()) {
+                ReservationEvent reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
+                cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent);
+                logger.info("product added: " + item.getProductId());
             }
+            logger.info("item added for user: " + reservation.getCustomerId());
             return new ResponseEntity<>(HttpStatus.CREATED);
-
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    @DeleteMapping(value = "/removeProduct/{id}")
+    @PostMapping(value = "/checkout/{customerId}")
     @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<String> removeProduct(@PathVariable String id) {
-
-        try(DaprClient daprClient = new DaprClientBuilder().build()) {
-            var result = daprClient.getState(redisStore,id,Reservation.class).block();
-            if (result == null) {
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    public ResponseEntity<String> checkout(@PathVariable String customerId) {
+        try {
+            var res = cartService.getCartById(customerId);
+            if (res == null) {
+                logger.info("No reservation found for: {}", customerId);
+                return ResponseEntity.notFound().build();
             }
-
-            daprClient.deleteState(redisStore,id).block();
-            logger.info("Deleting product: " + id);
-
-            for (var item : result.getValue().items ) {
-                var reservationEvent = new ReservationEvent(result.getValue().customerId, item.getQuantity(), item.getProductId());
-                daprClient.publishEvent(pubSubName, "On_Products_Removed_Cart",reservationEvent).block();
-            }
-            return new ResponseEntity<>(HttpStatus.OK);
-
+            cartService.publishEvent(pubSubName, "On_Reservation_Completed", res);
+            logger.info("Reservation completed for: {}", customerId);
+            return ResponseEntity.ok().body(String.valueOf(res.getCustomerId()));
         } catch (Exception e) {
+            logger.error("Error checking out reservation: {}", e.getMessage());
             throw new RuntimeException(e);
         }
     }

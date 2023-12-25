@@ -7,17 +7,19 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
 
-  kafka-broker:
+  kafka:
     image: confluentinc/cp-kafka:7.3.0
-    container_name: kafka-broker
+    container_name: kafka
     ports:
       - "9092:9092"
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     healthcheck:
       test: [ "CMD", "nc", "-vz", "localhost", "9092" ]
@@ -47,7 +49,6 @@ services:
     networks:
       - default
 
-
   eureka-server:
     image: springcloud/eureka
     container_name: eureka-server
@@ -55,9 +56,6 @@ services:
       - "8761:8761"
     networks:
       - default
-
-networks:
-  default:
 
   redis-cart_service:
     image: redis:7.2.3-alpine
@@ -69,6 +67,19 @@ networks:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  keykloak:
+    image: keycloak:latest
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+      KEYCLOAK_LOGLEVEL: INFO
+      ROOT_LOGLEVEL: INFO
+    ports:
+      - '8787:8787'
+      - '8181:8181'
+    command:
+      - start-dev
 
   zipkin:
     image: "openzipkin/zipkin"
@@ -82,8 +93,8 @@ networks:
     ports:
       - "8002:80"
     depends_on:
-      "kafka-broker":
-        condition: service_healthy
+#      "kafka":
+#        condition: service_healthy
       "redis-cart_service":
         condition: service_healthy
 
@@ -109,8 +120,8 @@ networks:
     volumes:
       - "./dapr/:/dapr"
     depends_on:
-      "kafka-broker":
+      "kafka":
         condition: service_healthy
 
-#networks:
-#  default:
+networks:
+  default:
