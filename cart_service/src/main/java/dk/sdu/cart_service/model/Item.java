@@ -4,11 +4,13 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.Serializable;
+
 @Getter
 @Setter
 @AllArgsConstructor
-public class Item {
-    public int quantity;
-    public double price;
-    public String productId;
+public class Item implements Serializable {
+    private int quantity;
+    private double price;
+    private String productId;
 }
