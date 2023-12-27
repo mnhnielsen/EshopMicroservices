@@ -5,8 +5,6 @@ import dk.sdu.orderservice.dto.CustomerDto;
 import dk.sdu.orderservice.dto.OrderDto;
 import dk.sdu.orderservice.model.OrderProduct;
 import dk.sdu.orderservice.service.OrderService;
-import org.aspectj.weaver.ast.Or;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
@@ -57,7 +55,7 @@ public class IntegrationTest {
         String url = "/api/order/submit/" + orderDto.getOrderId();
         System.out.println(url);
 
-        // When & Then
+        // When and Then
         mockMvc.perform(post(url, orderDto.getOrderId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(new ObjectMapper().writeValueAsString(customer)))
