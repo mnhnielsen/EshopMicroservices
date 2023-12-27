@@ -2,7 +2,6 @@ package dk.sdu.orderservice.controller;
 
 import dk.sdu.orderservice.dto.*;
 import dk.sdu.orderservice.mapper.OrderDtoMapper;
-import dk.sdu.orderservice.model.Order;
 import dk.sdu.orderservice.service.OrderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 @RestController
 @Slf4j
@@ -34,10 +32,10 @@ public class OrderController {
     }
 
     @GetMapping(value = "/{orderId}")
-    public ResponseEntity<Optional<OrderDto>> getOrder(@PathVariable String orderId) {
+    public ResponseEntity<?> getOrder(@PathVariable String orderId) {
         orderService.getOrder(orderId);
         System.out.println(orderService.getOrder(orderId));
-        return new ResponseEntity<>(HttpStatus.OK);
+        return ResponseEntity.ok().body("Here is order");
     }
 
     @PostMapping
