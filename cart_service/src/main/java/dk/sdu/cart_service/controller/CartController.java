@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -21,10 +22,41 @@ public class CartController {
     public final String pubSubName = "kafka-pubsub";
     private static final Logger logger = LoggerFactory.getLogger(CartController.class);
     private final CartService cartService;
+    private static final String DAPR_SIDE_CAR_PORT = "3500"; // Replace with your Dapr sidecar port
+    private static final String DAPR_PUBSUB_TOPIC = "On_Order_Submit"; // Replace with your Dapr pub/sub topic name
+
+
+
     @Autowired
     public CartController(CartService cartService) {
         this.cartService = cartService;
     }
+
+    // Triggered by Dapr when a message is published to the specified topic
+    @PostMapping("/dapr/subscribe")
+    public ResponseEntity<String> daprSubscribe(@RequestBody String payload) {
+        // Use RestTemplate to send a request to your own controller endpoint
+        String url = "http://localhost:" + DAPR_SIDE_CAR_PORT + "/consumeMessages";
+        ResponseEntity<String> response = new RestTemplate().postForEntity(url, payload, String.class);
+
+        // Log or handle the response as needed
+        System.out.println("Response from consumeMessages endpoint: " + response.getBody());
+
+        return ResponseEntity.ok("Subscribe request processed successfully");
+    }
+
+    // Example method to publish a message to Dapr pub/sub
+    @PostMapping("/publishMessage")
+    public ResponseEntity<String> publishMessage(@RequestBody String message) {
+        String url = "http://localhost:" + DAPR_SIDE_CAR_PORT + "/v1.0/publish/" + pubSubName + "/" + DAPR_PUBSUB_TOPIC;
+        ResponseEntity<String> response = new RestTemplate().postForEntity(url, message, String.class);
+
+        // Log or handle the response as needed
+        System.out.println("Response from publishMessage endpoint: " + response.getBody());
+
+        return ResponseEntity.ok("Message published successfully");
+    }
+
 
     @GetMapping(value = "/status")
     @ResponseStatus(HttpStatus.OK)

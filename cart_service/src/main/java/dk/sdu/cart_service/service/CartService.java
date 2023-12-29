@@ -36,6 +36,8 @@ public class CartService {
         this.redisTemplate = redisTemplate;
     }
 
+
+
     public Reservation getCartById(String customerId) {
         if (customerId == null || customerId.trim().isEmpty()) {
             log.error("Customer ID is null or empty");

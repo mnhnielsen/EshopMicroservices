@@ -3,13 +3,16 @@ package dk.sdu.inventory_service.controller;
 import dk.sdu.inventory_service.dto.InventoryDto;
 import dk.sdu.inventory_service.model.Reservation;
 import dk.sdu.inventory_service.service.InventoryService;
+import io.dapr.Topic;
+import io.dapr.client.DaprClient;
+import io.dapr.client.DaprClientBuilder;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.Date;
 import java.util.List;
@@ -37,12 +40,15 @@ public class InventoryController {
 
     @PostMapping("/reserve")
     @ResponseStatus(HttpStatus.OK)
+    @Topic(name = "On_Products_Reserved", pubsubName = pubSubName)
     public ResponseEntity<?> reserveProduct(@RequestBody Reservation reservation){
+        DaprClient daprClient = new DaprClientBuilder().build();
         var productForReservation = inventoryService.getItemById(reservation.getProductId());
         if (productForReservation.isEmpty()){
             return ResponseEntity.notFound().build();
         }
         if (productForReservation.get().getStock() < reservation.getQuantity()){
+            daprClient.publishEvent(pubSubName, "On_Reservation_Failed", reservation).block();
             inventoryService.publishEvent(pubSubName, "On_Reservation_Failed", reservation);
             logger.info("Reservation failed. Not enough stock");
             return ResponseEntity.notFound().build();
@@ -59,36 +65,63 @@ public class InventoryController {
 
     @PostMapping("/addStock")
     @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<?> addStock(@RequestBody Reservation reservation){
-        // if product is removed from cart
-        var product = inventoryService.getItemById(reservation.getProductId());
-        if (product.isEmpty()){
-            return ResponseEntity.notFound().build();
+    @Topic(name = "On_Products_Released", pubsubName = pubSubName)
+    public Mono<ResponseEntity<?>> addStock(@RequestBody Reservation reservation) {
+        // Null check for the reservation object
+        if (reservation == null || reservation.getProductId() == null || reservation.getQuantity() == 0) {
+            return Mono.just(ResponseEntity.badRequest().body("Invalid reservation details"));
         }
-        var add = product.get().getStock();
-        add += reservation.getQuantity();
-        product.get().setStock(add);
-        inventoryService.updateInventory(product.get());
-        logger.info("Order was canceled. Adding {} items back to stock for product {}",
-                reservation.getQuantity(), reservation.getProductId());
-        return ResponseEntity.ok().body(product.get());
+
+        return Mono.fromSupplier(() -> {
+            try {
+                var product = inventoryService.getItemById(reservation.getProductId());
+                if (product.isEmpty()) {
+                    logger.info("No product found for: {}", reservation.getProductId());
+                    return ResponseEntity.notFound().build();
+                }
+
+                var add = product.get().getStock();
+                add += reservation.getQuantity();
+                product.get().setStock(add);
+                inventoryService.updateInventory(product.get());
+
+                logger.info("Order was canceled. Adding {} items back to stock for product {}",
+                        reservation.getQuantity(), reservation.getProductId());
+
+                return ResponseEntity.ok().body(product.get());
+
+            } catch (Exception e) {
+                logger.error("Error occurred while adding stock: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing the request");
+            }
+        });
     }
+
+    @GetMapping("/reservation/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<?> getReservationById(@PathVariable String id){
+        return ResponseEntity.ok().body(inventoryService.getReservationBy(id));
+    }
+
 
     @PostMapping("/cancel")
     @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<?> cancelOrder(@RequestBody Reservation reservation) {
+    @Topic(name = "On_Order_Canceled", pubsubName = pubSubName)
+    public Mono<ResponseEntity<?>> cancelOrder(@RequestBody Reservation reservation) {
         // if order is canceled
-        var product = inventoryService.getItemById(reservation.getProductId());
-        if (product.isEmpty()){
-            return ResponseEntity.notFound().build();
-        }
-        var add = product.get().getStock();
-        add += reservation.getQuantity();
-        product.get().setStock(add);
-        inventoryService.updateInventory(product.get());
-        logger.info("Order was canceled. Adding {} items back to stock for product {}",
-                reservation.getQuantity(), reservation.getProductId());
-        return ResponseEntity.ok().body(product.get());
+        return Mono.fromSupplier(() -> {
+            var product = inventoryService.getItemById(reservation.getProductId());
+            if (product.isEmpty()){
+                return ResponseEntity.notFound().build();
+            }
+            var add = product.get().getStock();
+            add += reservation.getQuantity();
+            product.get().setStock(add);
+            inventoryService.updateInventory(product.get());
+            logger.info("Order was canceled. Adding {} items back to stock for product {}",
+                    reservation.getQuantity(), reservation.getProductId());
+            return ResponseEntity.ok().body(product.get());
+        });
     }
 
     @PostMapping
