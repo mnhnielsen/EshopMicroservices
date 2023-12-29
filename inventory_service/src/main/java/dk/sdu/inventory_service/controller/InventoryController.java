@@ -139,7 +139,7 @@ public class InventoryController {
     @PatchMapping("/edit/{id}")
     @ResponseStatus(HttpStatus.OK)
     public void updateProduct(@PathVariable String id,@RequestBody InventoryDto inventoryDto){
-        inventoryDto.setId(id);
+        inventoryDto.setProductId(id);
         inventoryService.updateInventory(inventoryDto);
     }
 }

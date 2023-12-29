@@ -9,7 +9,7 @@ import lombok.Setter;
 @AllArgsConstructor
 
 public class InventoryDto {
-    private String id;
+    private String productId;
     private String name;
     private String description;
     private double price;

@@ -15,7 +15,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 public class Inventory {
     @Id
-    private String id;
+    private String productId;
     private String name;
     private String description;
     private double price;
@@ -23,8 +23,8 @@ public class Inventory {
     private String bikeTypeId;
     private String bikeType;
 
-    public Inventory(String id, String name, String description, double price, int stock, String bikeTypeId, String bikeType) {
-        this.id = id;
+    public Inventory(String productId, String name, String description, double price, int stock, String bikeTypeId, String bikeType) {
+        this.productId = productId;
         this.name = name;
         this.description = description;
         this.price = price;
