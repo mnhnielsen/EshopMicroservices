@@ -1,8 +1,11 @@
 package dk.sdu.cart_service.controller;
 
+import dk.sdu.cart_service.model.Payment;
 import dk.sdu.cart_service.model.Reservation;
 import dk.sdu.cart_service.model.ReservationEvent;
 import dk.sdu.cart_service.service.CartService;
+import io.dapr.Topic;
+import io.dapr.client.domain.CloudEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,10 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import io.dapr.client.DaprClient;
 import io.dapr.client.DaprClientBuilder;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("api/cart")
@@ -137,7 +140,7 @@ public class CartController {
                 logger.info("No reservation found for: {}", customerId);
                 return ResponseEntity.notFound().build();
             }
-            client.publishEvent(pubSubName, "On_Reservation_Completed", res).block();
+            client.publishEvent(pubSubName, "On_Checkout", res).block();
             logger.info("Reservation completed for: {}", customerId);
             return ResponseEntity.ok().body(String.valueOf(res.getCustomerId()));
         } catch (Exception e) {
@@ -145,6 +148,47 @@ public class CartController {
             throw new RuntimeException(e);
         }
     }
+
+    @PostMapping(value = "/orderSubmit")
+    @ResponseStatus(HttpStatus.OK)
+    @Topic(name = "On_Order_Submit", pubsubName = pubSubName)
+    public Mono<ResponseEntity<?>> removeWhenOrderSubmit(CloudEvent<Payment> cloudEvent) {
+        return Mono.fromSupplier(() -> {
+            try {
+                var payment = cloudEvent.getData();
+                var res = cartService.getCartById(payment.getCustomerId());
+                cartService.removeCart(res.getCustomerId());
+                logger.info("Order submitted. Removing content of basket");
+                return ResponseEntity.ok().body(String.valueOf(payment.getCustomerId()));
+            } catch (Exception e) {
+                logger.error("Error deleting reservation: {}", e.getMessage());
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @PostMapping(value = "/failedReservation")
+    @ResponseStatus(HttpStatus.OK)
+    @Topic(name = "On_Reservation_Failed", pubsubName = pubSubName)
+    public Mono<ResponseEntity<?>> failedReservation(CloudEvent<ReservationEvent> cloudEvent) {
+        return Mono.fromSupplier(() ->{
+            try {
+                var reservationEvent = cloudEvent.getData();
+                var res = cartService.getCartById(reservationEvent.getCustomerId());
+                if (res == null) {
+                    logger.info("No reservation found for: {}", reservationEvent.getCustomerId());
+                    return ResponseEntity.notFound().build();
+            }
+                cartService.removeCart(res.getCustomerId());
+                logger.info("Reservation deleted for: {}", reservationEvent.getCustomerId());
+                return ResponseEntity.ok().body(String.valueOf(reservationEvent.getCustomerId()));
+            } catch (Exception e) {
+                logger.error("Error deleting reservation: {}", e.getMessage());
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
 }
 
 
