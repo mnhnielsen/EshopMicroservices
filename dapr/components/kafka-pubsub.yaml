@@ -7,7 +7,7 @@ spec:
   version: v1
   metadata:
     - name: brokers # Required. Kafka broker connection setting
-      value: "localhost:9092"
+      value: "broker:9092"
     - name: consumerGroup # Optional. Used for input bindings.
       value: "{namespace}"
     - name: clientID # Optional. Used as client tracing ID by Kafka brokers.

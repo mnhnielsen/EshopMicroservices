@@ -4,11 +4,11 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
+@AllArgsConstructor
 @Getter
 @Setter
-@AllArgsConstructor
-public class ReservationEvent {
+public class Payment {
     private String customerId;
-    private int quantity;
-    private String productId;
+    private String orderId;
+    private String orderStatus;
 }

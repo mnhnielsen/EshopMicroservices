@@ -6,7 +6,9 @@ import dk.sdu.inventory_service.dto.InventoryDto;
 import dk.sdu.inventory_service.mapper.InventoryDtoMapper;
 import dk.sdu.inventory_service.model.Event;
 import dk.sdu.inventory_service.model.Inventory;
+import dk.sdu.inventory_service.model.Reservation;
 import dk.sdu.inventory_service.repository.InventoryRepository;
+import dk.sdu.inventory_service.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 public class InventoryService {
     private final InventoryRepository inventoryRepository;
     private final InventoryDtoMapper inventoryDtoMapper;
+    private final ReservationRepository reservationRepository;
     private final String DAPR_HOST = System.getenv().getOrDefault("DAPR_HOST", "http://localhost");
     private final String DAPR_HTTP_PORT = System.getenv().getOrDefault("DAPR_HTTP_PORT", "3500");
     private static final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
@@ -53,23 +56,23 @@ public class InventoryService {
                 .build();
 
         inventoryRepository.save(inventory);
-        log.info("Saved product {} to inventory", inventory.getId());
+        log.info("Saved product {} to inventory", inventory.getProductId());
     }
 
     public void deleteFromInventory(String id){
         Inventory inventory = Inventory.builder().build();
         inventoryRepository.deleteById(id);
-        log.info("Product {} removed from inventory", inventory.getId());
+        log.info("Product {} removed from inventory", inventory.getProductId());
     }
 
     public void updateInventory(InventoryDto inventoryDto) {
         // Validate that inventory products has a non-null and non-empty ID
-        if (inventoryDto.getId() == null || inventoryDto.getId().isEmpty()) {
+        if (inventoryDto.getProductId() == null || inventoryDto.getProductId().isEmpty()) {
             throw new IllegalArgumentException("ID cannot be null or empty for updating inventory");
         }
 
         // Fetch the existing entity from the database
-        var inventoryById = inventoryRepository.findById(inventoryDto.getId());
+        var inventoryById = inventoryRepository.findById(inventoryDto.getProductId());
 
         if (inventoryById.isPresent()) {
             // Update the existing entity with the values from the DTO
@@ -83,10 +86,14 @@ public class InventoryService {
             // Save the updated entity back to the database
             inventoryRepository.save(existingInventory);
 
-            log.info("Updated product {} in inventory", existingInventory.getId());
+            log.info("Updated product {} in inventory", existingInventory.getProductId());
         } else {
-            throw new IllegalArgumentException("No product found with ID: " + inventoryDto.getId());
+            throw new IllegalArgumentException("No product found with ID: " + inventoryDto.getProductId());
         }
+    }
+
+    public Optional<Reservation> getReservationBy(String id){
+       return reservationRepository.findById(id);
     }
 
     public <T> void publishEvent(String pubSubName, String topic, T payload) {
