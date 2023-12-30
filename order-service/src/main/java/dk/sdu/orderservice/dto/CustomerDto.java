@@ -17,5 +17,4 @@ public class CustomerDto {
 
     @JsonProperty("address")
     private String address;
-
 }

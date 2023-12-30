@@ -5,15 +5,21 @@ import dk.sdu.orderservice.mapper.OrderDtoMapper;
 import dk.sdu.orderservice.model.Customer;
 import dk.sdu.orderservice.model.Order;
 import dk.sdu.orderservice.service.OrderService;
+import io.dapr.Topic;
+import io.dapr.client.DaprClient;
+import io.dapr.client.DaprClientBuilder;
+import io.dapr.client.domain.CloudEvent;
+import io.dapr.exceptions.DaprException;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 @RestController
 @Slf4j
@@ -22,6 +28,7 @@ public class OrderController {
     private final OrderService orderService;
     private final OrderDtoMapper orderDtoMapper;
     private final String pubSubName = "kafka-pubsub";
+
     @Autowired
     public OrderController(OrderService orderService, OrderDtoMapper orderDtoMapper) {
         this.orderService = orderService;
@@ -35,7 +42,7 @@ public class OrderController {
     }
 
     @GetMapping(value = "/{orderId}")
-    public CompletableFuture<Optional<OrderDto>> getOrder(@PathVariable String orderId) {
+    public Optional<OrderDto> getOrder(@PathVariable String orderId) {
         var res = orderService.getOrder(orderId);
         System.out.println(res);
         Hibernate.initialize(res);
@@ -48,40 +55,48 @@ public class OrderController {
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
-    @PostMapping("submit/{id}")
-    public CompletableFuture<ResponseEntity<Object>> submitOrder(@PathVariable String id, @RequestBody CustomerDto customer) {
-        return orderService.getOrder(id)
-                .thenApply(order -> {
-                    if (order.isEmpty()) {
-                        throw new IllegalStateException("Order not found");
-                    }
-                    var finalOrder = new Order();
-                    orderDtoMapper.map(finalOrder); // Map from DTO to entity
-                    finalOrder.setOrderStatus("Reserved");
-                    log.info("Order {} {} {}", finalOrder.getOrderId(), finalOrder.getCustomerId() ,finalOrder.getOrderStatus());
-
-                    var customerToSave = new Customer(finalOrder.getCustomerId(), customer.getName(), customer.getEmail(), customer.getAddress());
-                    log.info("Customer: {}", customerToSave);
-                    if (finalOrder.getOrderId() == null || customerToSave.getName() == null || customerToSave.getEmail() == null || customerToSave.getAddress() == null) {
-                        log.error("Invalid Customer: {}", customerToSave);
-                        throw new IllegalArgumentException("Invalid CustomerDto: One or more required fields are null");
-                    }
-                    orderService.addCustomer(customerToSave);
-                    return finalOrder;
-                })
-                .thenApply(saved -> {
-                    var result = new PaymentDto(saved.getCustomerId(), saved.getOrderId(), saved.getOrderStatus());
-                    orderService.publishEvent(pubSubName, "On_Order_Submit", result);
-                    log.info("ORDER SUBMITTED");
-
-                    return ResponseEntity.ok().build();
-                })
-                .exceptionally(ex -> {
-                    log.error("Error processing order submission: {}", ex.getMessage(), ex);
-                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                });
+    @PostMapping(value = "/initOrder")
+    @ResponseStatus(HttpStatus.OK)
+    @Topic(name = "On_Checkout", pubsubName = pubSubName)
+    public Mono<ResponseEntity<String>> startOrder(CloudEvent<OrderDto> cloudEvent) {
+        return Mono.fromSupplier(() -> {
+            var order = cloudEvent.getData();
+            for (var product : order.getOrderProducts()) {
+                var id = product.getOrderId();
+                id = order.getOrderId();
+                product.setOrderId(id);
+            }
+            orderService.addOrder(order);
+            return ResponseEntity.ok().build();
+        });
     }
 
+    @PostMapping("/submit/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> submitOrder(@PathVariable String id, @RequestBody CloudEvent<CustomerDto> cloudEvent) {
+        DaprClient client = new DaprClientBuilder().build();
+        try {
+            var order = orderService.getOrder(id);
+            if (order.isEmpty()) {
+                log.error("Order with ID {} not found", id);
+                return ResponseEntity.notFound().build();
+            }
+            order.get().setOrderStatus("Reserved");
+            var customer = new Customer(order.get().getCustomerId(), cloudEvent.getData().getName(),
+                    cloudEvent.getData().getEmail(), cloudEvent.getData().getAddress());
+            orderService.addCustomer(customer);
+            var res = new PaymentDto(order.get().getOrderId(), order.get().getCustomerId(), order.get().getOrderStatus());
+            client.publishEvent(pubSubName, "On_Order_Submit", res).block();
+            log.info("Order {} submitted", id);
+            return ResponseEntity.ok().body(String.valueOf(order));
+        } catch (DaprException e) {
+            log.error("Error with Dapr client: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing the order");
+        } catch (Exception e) {
+            log.error("Unexpected error: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error occurred");
+        }
+    }
 
     @PostMapping("/add/{orderId}")
     public ResponseEntity<Void> addProductToOrder(@PathVariable String orderId, @RequestBody OrderProductDto orderProductDto) {
@@ -89,27 +104,79 @@ public class OrderController {
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
+    @PostMapping(value = "/payed")
+    @ResponseStatus(HttpStatus.OK)
+    @Topic(name = "On_Order_Shipped", pubsubName = pubSubName)
+    public Mono<ResponseEntity<String>> orderPayed(CloudEvent<PaymentDto> cloudEvent) {
+        return Mono.fromSupplier(() -> {
+            try {
+                var order = orderService.getOrder(cloudEvent.getData().getOrderId());
+                if (order.isEmpty()) {
+                    log.error("Order with ID {} not found", cloudEvent.getData().getOrderId());
+                    return ResponseEntity.notFound().build();
+                }
+                order.get().setOrderStatus("Shipped");
+                orderService.updateOrderStatus(order.get());
+                log.info("Order {} payed", cloudEvent.getData().getOrderId());
+                return ResponseEntity.ok().build();
+            } catch (Exception e) {
+                log.error("Unexpected error: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error occurred");
+            }
+        });
+    }
+
     @DeleteMapping(value = "/delete/{orderId}")
-    public CompletableFuture<ResponseEntity<Object>> deleteOrder(@PathVariable String orderId) {
-        return orderService.getOrder(orderId)
-                .thenCompose(orderToDeleteDto -> {
-                    if (orderToDeleteDto.isEmpty()) {
-                        log.info("Order with ID {} not found. Unable to delete.", orderId);
-                        return CompletableFuture.completedFuture(new ResponseEntity<>(HttpStatus.NOT_FOUND));
-                    }
-                    Order order = new Order();
-                    orderToDeleteDto = Optional.ofNullable(orderDtoMapper.map(order));
-                    orderService.deleteOrder(orderId);
-                    for (var item : orderToDeleteDto.get().getOrderProducts()) {
-                        var cancelOrder = new CancelOrderDto(orderId, orderToDeleteDto.get().getCustomerId(), item.getQuantity());
-                        orderService.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder);
-                    }
-                    log.info("Order with ID {} deleted successfully.", orderId);
-                    return CompletableFuture.completedFuture(new ResponseEntity<>(HttpStatus.OK));
-                })
-                .exceptionally(ex -> {
-                    log.error("Error while deleting order with ID {}: {}", orderId, ex.getMessage(), ex);
-                    return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-                });
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<String> deleteOrder(@PathVariable String orderId, CloudEvent<CancelOrderDto> cloudEvent) {
+        DaprClient client = new DaprClientBuilder().build();
+        try {
+               var order = orderService.getOrder(orderId);
+            if (order.isEmpty()) {
+                log.error("Order with ID {} not found", orderId);
+                return ResponseEntity.notFound().build();
+            }
+            var orderToDelete = cloudEvent.getData();
+            orderService.deleteOrder(orderToDelete.getOrderId());
+            for (var product : order.get().getOrderProducts()) {
+                var cancelOrder = new CancelOrderDto(order.get().getOrderId(), product.getProductId(), product.getQuantity());
+                client.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder).block();
+            }
+            log.info("Order {} deleted", orderId);
+            return ResponseEntity.ok().build();
+        } catch (DaprException e) {
+            log.error("Error with Dapr client: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting the order");
+        } catch (Exception e) {
+            log.error("Unexpected error: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error occurred");
+        }
+    }
+
+    @PostMapping(value = "/paymentFailed")
+    @ResponseStatus(HttpStatus.OK)
+    @Topic(name = "On_Payment_Failed", pubsubName = pubSubName)
+    public Mono<ResponseEntity<String>> paymentFailed(@RequestBody CloudEvent<PaymentDto> cloudEvent) {
+        return Mono.fromSupplier(() -> {
+            try {
+                DaprClient client = new DaprClientBuilder().build();
+                var order = orderService.getOrder(cloudEvent.getData().getOrderId());
+                if (order.isEmpty()) {
+                    log.error("Order with ID {} not found", cloudEvent.getData().getOrderId());
+                    return ResponseEntity.notFound().build();
+                }
+                order.get().setOrderStatus("Cancelled");
+                orderService.updateOrderStatus(order.get());
+                for (var product : order.get().getOrderProducts()) {
+                    var cancelOrder = new CancelOrderDto(order.get().getOrderId(), product.getProductId(), product.getQuantity());
+                    client.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder).block();
+                }
+                log.info("Order {} payment failed. Order is now canceled", cloudEvent.getData().getOrderId());
+                return ResponseEntity.ok().build();
+            } catch (Exception e) {
+                log.error("Unexpected error: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error occurred");
+            }
+        });
     }
 }

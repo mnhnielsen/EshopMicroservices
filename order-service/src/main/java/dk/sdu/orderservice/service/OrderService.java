@@ -41,16 +41,24 @@ public class OrderService {
 
 
 
-    public CompletableFuture<Optional<OrderDto>> getOrder(String id) {
-        return CompletableFuture.supplyAsync(() -> orderRepository.findById(id)
-                .map(orderDtoMapper::map)).exceptionally(ex -> {
-            log.error("Error retrieving order with ID {}: {}", id, ex.getMessage(), ex);
-            return Optional.empty();
-        });
+    public Optional<OrderDto> getOrder(String id) {
+        try {
+            Optional<Order> orderOptional = orderRepository.findById(id);
+            if (orderOptional.isPresent()) {
+                Order order = orderOptional.get();
+                return Optional.of(orderDtoMapper.map(order));
+            } else {
+                log.error("Order with ID {} not found", id);
+                return Optional.empty();
+            }
+        } catch (Exception e) {
+            log.error("Error getting order with ID {}: {}", id, e.getMessage(), e);
+            throw new RuntimeException("Error getting order", e);
+        }
     }
 
 
-    public CompletableFuture<OrderDto> addOrder(OrderDto orderDto) {
+    public void addOrder(OrderDto orderDto) {
         if (orderDto == null || orderDto.getOrderId() == null || orderDto.getCustomerId() == null || orderDto.getOrderProducts() == null) {
             log.error("Invalid Order: {}", orderDto);
             throw new IllegalArgumentException("Invalid OrderDto: One or more required fields are null");
@@ -65,7 +73,7 @@ public class OrderService {
 
             orderRepository.save(order);
             log.info("Saved order {}", order.getOrderId());
-            return CompletableFuture.completedFuture(orderDto);
+            CompletableFuture.completedFuture(orderDto);
         } catch (Exception e) {
             log.error("Error saving order: {}", e.getMessage(), e);
             throw new RuntimeException("Error saving order", e);
@@ -108,6 +116,24 @@ public class OrderService {
         } catch (Exception e) {
             log.error("Error deleting order with ID {}: {}", id, e.getMessage(), e);
             throw new RuntimeException("Error deleting order", e);
+        }
+    }
+
+    public void updateOrderStatus(OrderDto orderDto) {
+        try {
+            var orderToUpdate = orderRepository.findById(orderDto.getOrderId());
+            if (orderToUpdate.isPresent()) {
+                Order order = orderToUpdate.get();
+                order.setOrderStatus(orderDto.getOrderStatus());
+                orderRepository.save(order);
+                log.info("Order {} has been updated", order.getOrderId());
+            } else {
+                log.error("Order with ID {} not found. Unable to update.", orderDto.getOrderId());
+                throw new RuntimeException("Order not found");
+            }
+        } catch (Exception e) {
+            log.error("Error updating order with ID {}: {}", orderDto.getOrderId(), e.getMessage(), e);
+            throw new RuntimeException("Error updating order", e);
         }
     }
 
