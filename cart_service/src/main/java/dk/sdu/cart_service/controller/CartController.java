@@ -9,8 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import io.dapr.client.DaprClient;
+import io.dapr.client.DaprClientBuilder;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -22,42 +23,11 @@ public class CartController {
     public final String pubSubName = "kafka-pubsub";
     private static final Logger logger = LoggerFactory.getLogger(CartController.class);
     private final CartService cartService;
-    private static final String DAPR_SIDE_CAR_PORT = "3500"; // Replace with your Dapr sidecar port
-    private static final String DAPR_PUBSUB_TOPIC = "On_Order_Submit"; // Replace with your Dapr pub/sub topic name
-
-
 
     @Autowired
     public CartController(CartService cartService) {
         this.cartService = cartService;
     }
-
-    // Triggered by Dapr when a message is published to the specified topic
-    @PostMapping("/dapr/subscribe")
-    public ResponseEntity<String> daprSubscribe(@RequestBody String payload) {
-        // Use RestTemplate to send a request to your own controller endpoint
-        String url = "http://localhost:" + DAPR_SIDE_CAR_PORT + "/consumeMessages";
-        ResponseEntity<String> response = new RestTemplate().postForEntity(url, payload, String.class);
-
-        // Log or handle the response as needed
-        System.out.println("Response from consumeMessages endpoint: " + response.getBody());
-
-        return ResponseEntity.ok("Subscribe request processed successfully");
-    }
-
-    // Example method to publish a message to Dapr pub/sub
-    @PostMapping("/publishMessage")
-    public ResponseEntity<String> publishMessage(@RequestBody String message) {
-        String url = "http://localhost:" + DAPR_SIDE_CAR_PORT + "/v1.0/publish/" + pubSubName + "/" + DAPR_PUBSUB_TOPIC;
-        ResponseEntity<String> response = new RestTemplate().postForEntity(url, message, String.class);
-
-        // Log or handle the response as needed
-        System.out.println("Response from publishMessage endpoint: " + response.getBody());
-
-        return ResponseEntity.ok("Message published successfully");
-    }
-
-
     @GetMapping(value = "/status")
     @ResponseStatus(HttpStatus.OK)
     public String getStatus() {
@@ -116,6 +86,7 @@ public class CartController {
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<String> removeReservation(@PathVariable String customerId) {
         try {
+            DaprClient client = new DaprClientBuilder().build();
             var res = cartService.getCartById(customerId);
             if (res == null) {
                 logger.info("No reservation found for: {}", customerId);
@@ -125,7 +96,7 @@ public class CartController {
             logger.info("Reservation deleted for: {}", customerId);
             for (var item : res.getItems()) {
                 ReservationEvent reservationEvent = new ReservationEvent(res.getCustomerId(), item.getQuantity(), item.getProductId());
-                cartService.publishEvent(pubSubName, "On_Products_Released", reservationEvent);
+                client.publishEvent(pubSubName, "On_Products_Released", reservationEvent).block();
                 logger.info("product removed: " + item.getProductId());
             }
             return ResponseEntity.ok().body(String.valueOf(customerId));
@@ -139,13 +110,14 @@ public class CartController {
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) {
         try {
+            DaprClient client = new DaprClientBuilder().build();
             if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
             cartService.saveReservation(reservation);
             for (var item : reservation.getItems()) {
                 ReservationEvent reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
-                cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent);
+                client.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent).block();
                 logger.info("product added: " + item.getProductId());
             }
             logger.info("item added for user: " + reservation.getCustomerId());
@@ -159,12 +131,13 @@ public class CartController {
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<String> checkout(@PathVariable String customerId) {
         try {
+            DaprClient client = new DaprClientBuilder().build();
             var res = cartService.getCartById(customerId);
             if (res == null) {
                 logger.info("No reservation found for: {}", customerId);
                 return ResponseEntity.notFound().build();
             }
-            cartService.publishEvent(pubSubName, "On_Reservation_Completed", res);
+            client.publishEvent(pubSubName, "On_Reservation_Completed", res).block();
             logger.info("Reservation completed for: {}", customerId);
             return ResponseEntity.ok().body(String.valueOf(res.getCustomerId()));
         } catch (Exception e) {
