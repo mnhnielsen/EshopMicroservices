@@ -33,8 +33,7 @@ services:
 #      - "27017"
 #    volumes:
 #      - ./mongo-data/product-service-data:/data/db
-#    networks:
-#      - default
+
 
   mongo-inventory_service:
     image: mongo:6-jammy
@@ -44,16 +43,14 @@ services:
       - "27017"
     volumes:
       - ./mongo-data/inventory-service-data:/data/db
-    networks:
-      - default
+
 
   eureka-server:
     image: springcloud/eureka
     container_name: eureka-server
     ports:
       - "8761:8761"
-    networks:
-      - default
+
 
   redis-cart_service:
     image: redis:7.2.3-alpine
@@ -101,7 +98,7 @@ services:
       context: .
       dockerfile: inventory_service/Dockerfile
     environment:
-      - SERVER_PORT=8082
+      # - SERVER_PORT=8082
       - MONGODB_URI=mongodb:mongodb://mongo-inventory_service:27017
       - MONGODB_STATUS_HOST=mongo-inventory_service
       - MONGODB_STATUS_PORT=27017
@@ -110,8 +107,8 @@ services:
     depends_on:
       "broker":
         condition: service_healthy
-      "redis-cart_service":
-        condition: service_healthy
+      # "redis-cart_service":
+      #   condition: service_healthy
 
   inventory-api-dapr:
     image: "daprio/daprd:1.9.4"
@@ -175,5 +172,3 @@ services:
       "broker":
         condition: service_healthy
 
-networks:
-  default:

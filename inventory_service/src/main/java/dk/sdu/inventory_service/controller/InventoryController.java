@@ -1,19 +1,24 @@
 package dk.sdu.inventory_service.controller;
 
 import dk.sdu.inventory_service.dto.InventoryDto;
+import dk.sdu.inventory_service.model.Order;
 import dk.sdu.inventory_service.model.Reservation;
+import dk.sdu.inventory_service.model.ReservationEvent;
 import dk.sdu.inventory_service.service.InventoryService;
 import io.dapr.Topic;
 import io.dapr.client.DaprClient;
 import io.dapr.client.DaprClientBuilder;
+import io.dapr.client.domain.CloudEvent;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -38,29 +43,38 @@ public class InventoryController {
         return inventoryService.getItemById(id);
     }
 
-    @PostMapping("/reserve")
-    @ResponseStatus(HttpStatus.OK)
-    @Topic(name = "On_Products_Reserved", pubsubName = pubSubName)
-    public ResponseEntity<?> reserveProduct(@RequestBody Reservation reservation){
-        DaprClient daprClient = new DaprClientBuilder().build();
-        var productForReservation = inventoryService.getItemById(reservation.getProductId());
-        if (productForReservation.isEmpty()){
-            return ResponseEntity.notFound().build();
-        }
-        if (productForReservation.get().getStock() < reservation.getQuantity()){
-            daprClient.publishEvent(pubSubName, "On_Reservation_Failed", reservation).block();
-            inventoryService.publishEvent(pubSubName, "On_Reservation_Failed", reservation);
-            logger.info("Reservation failed. Not enough stock");
-            return ResponseEntity.notFound().build();
-        }
+    @Topic(name = "On_Products_Reserved", pubsubName = "kafka-pubsub")
+    @PostMapping(path = "/reserve", consumes = MediaType.ALL_VALUE)
+    public Mono<ResponseEntity> getCheckout(@RequestBody(required = false) CloudEvent<ReservationEvent> cloudEvent) {
+        return Mono.fromSupplier(() -> {
+            try {
+                String reservationId = cloudEvent.getData().getProductId();
+                ReservationEvent reservationEvent = cloudEvent.getData();
+                logger.info("Subscriber received: " + reservationId);
+                var productForReservation = inventoryService.getItemById(reservationId);
+                if (productForReservation.isEmpty()){
+                    logger.warn("Could not find any products with ID: " + reservationId);
+                    return ResponseEntity.notFound().build();
+                }
 
-        var subtract = productForReservation.get().getStock();
-        subtract -= reservation.getQuantity();
-        productForReservation.get().setStock(subtract);
-        inventoryService.updateInventory(productForReservation.get());
-        logger.info("{} items reserved for product {} for user {} at time {}",
-                reservation.getQuantity(), reservation.getProductId(), reservation.getCustomerId(), new Date().getTime());
-        return ResponseEntity.ok().body(productForReservation.get());
+                if (productForReservation.get().getStock() < reservationEvent.getQuantity()){
+                    //daprClient.publishEvent(pubSubName, "On_Reservation_Failed", reservationEvent).block();
+                    inventoryService.publishEvent(pubSubName, "On_Reservation_Failed", reservationEvent);
+                    logger.info("Reservation failed. Not enough stock");
+                    return ResponseEntity.notFound().build();
+                }
+
+                var subtract = productForReservation.get().getStock();
+                subtract -= reservationEvent.getQuantity();
+                productForReservation.get().setStock(subtract);
+                inventoryService.updateInventory(productForReservation.get());
+                logger.info("{} items reserved for product {} for user {} at time {}",
+                        reservationEvent.getQuantity(), reservationEvent.getProductId(), reservationEvent.getCustomerId(), new Date().getTime());
+                return ResponseEntity.ok().body("Success");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     @PostMapping("/addStock")
@@ -143,3 +157,5 @@ public class InventoryController {
         inventoryService.updateInventory(inventoryDto);
     }
 }
+
+

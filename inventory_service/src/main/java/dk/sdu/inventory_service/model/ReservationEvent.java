@@ -1,11 +1,11 @@
-package dk.sdu.cart_service.model;
+package dk.sdu.inventory_service.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
-@AllArgsConstructor
+@Setter
 public class ReservationEvent {
     private String customerId;
     private int quantity;

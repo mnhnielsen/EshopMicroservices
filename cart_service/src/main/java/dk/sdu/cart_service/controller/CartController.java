@@ -3,6 +3,10 @@ package dk.sdu.cart_service.controller;
 import dk.sdu.cart_service.model.Reservation;
 import dk.sdu.cart_service.model.ReservationEvent;
 import dk.sdu.cart_service.service.CartService;
+import io.dapr.client.DaprClient;
+import io.dapr.client.DaprClientBuilder;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -137,7 +141,8 @@ public class CartController {
 
     @PostMapping(value = "/reserve")
     @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) {
+    public ResponseEntity<String> reserveProduct(@RequestBody(required = false) Reservation reservation) throws InterruptedException {
+        DaprClient client = new DaprClientBuilder().build();
         try {
             if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
@@ -145,7 +150,11 @@ public class CartController {
             cartService.saveReservation(reservation);
             for (var item : reservation.getItems()) {
                 ReservationEvent reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
-                cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent);
+                client.publishEvent(
+                        pubSubName,
+                        "On_Products_Reserved",
+                        reservationEvent).block();
+                //cartService.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent);
                 logger.info("product added: " + item.getProductId());
             }
             logger.info("item added for user: " + reservation.getCustomerId());
@@ -173,5 +182,4 @@ public class CartController {
         }
     }
 }
-
 

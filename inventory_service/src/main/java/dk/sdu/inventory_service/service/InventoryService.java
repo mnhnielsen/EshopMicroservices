@@ -9,6 +9,8 @@ import dk.sdu.inventory_service.model.Inventory;
 import dk.sdu.inventory_service.model.Reservation;
 import dk.sdu.inventory_service.repository.InventoryRepository;
 import dk.sdu.inventory_service.repository.ReservationRepository;
+import io.dapr.client.DaprClient;
+import io.dapr.client.DaprClientBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,7 @@ public class InventoryService {
     private final String DAPR_HTTP_PORT = System.getenv().getOrDefault("DAPR_HTTP_PORT", "3500");
     private static final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
+    private DaprClient client = new DaprClientBuilder().build();
     public List<InventoryDto> getAllInventory(){
         var inventory = inventoryRepository.findAll();
         return inventory.stream().map(inventoryDtoMapper).collect(Collectors.toList());
@@ -97,30 +100,36 @@ public class InventoryService {
     }
 
     public <T> void publishEvent(String pubSubName, String topic, T payload) {
-        try {
-            String uri = DAPR_HOST + ":" + DAPR_HTTP_PORT + "/v1.0/publish/" + pubSubName + "/" + topic;
-            ObjectMapper objectMapper = new ObjectMapper();
-            String payloadJson = objectMapper.writeValueAsString(payload);
+        client.publishEvent(
+                pubSubName,
+                topic,
+                payload).block();
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(uri))
-                    .POST(HttpRequest.BodyPublishers.ofString(payloadJson))
-                    .header("Content-Type", "application/json")
-                    .build();
-
-            System.out.println(request);
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() == HttpStatus.OK.value() || response.statusCode() == HttpStatus.NO_CONTENT.value()) {
-                System.out.println(uri + " " + response.body());
-            } else {
-                System.err.println("Failed to publish event. Status code: " + response.statusCode());
-            }
-        } catch (JsonProcessingException e) {
-            System.err.println("Error converting payload to JSON: " + e.getMessage());
-        } catch (IOException | InterruptedException e) {
-            System.err.println("Error sending HTTP request: " + e.getMessage());
-        }
+//        try {
+//
+//            String uri = DAPR_HOST + ":" + DAPR_HTTP_PORT + "/v1.0/publish/" + pubSubName + "/" + topic;
+//            ObjectMapper objectMapper = new ObjectMapper();
+//            String payloadJson = objectMapper.writeValueAsString(payload);
+//
+//            HttpRequest request = HttpRequest.newBuilder()
+//                    .uri(URI.create(uri))
+//                    .POST(HttpRequest.BodyPublishers.ofString(payloadJson))
+//                    .header("Content-Type", "application/json")
+//                    .build();
+//
+//            System.out.println(request);
+//            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+//
+//            if (response.statusCode() == HttpStatus.OK.value() || response.statusCode() == HttpStatus.NO_CONTENT.value()) {
+//                System.out.println(uri + " " + response.body());
+//            } else {
+//                System.err.println("Failed to publish event. Status code: " + response.statusCode());
+//            }
+//        } catch (JsonProcessingException e) {
+//            System.err.println("Error converting payload to JSON: " + e.getMessage());
+//        } catch (IOException | InterruptedException e) {
+//            System.err.println("Error sending HTTP request: " + e.getMessage());
+//        }
     }
 
     public Event[] getEvent(String pubSubName, String path, String topic) {
