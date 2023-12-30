@@ -1,9 +1,11 @@
 package dk.sdu.orderservice.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dk.sdu.orderservice.dto.*;
 import dk.sdu.orderservice.mapper.OrderDtoMapper;
 import dk.sdu.orderservice.model.Customer;
 import dk.sdu.orderservice.model.Order;
+import dk.sdu.orderservice.model.OrderProduct;
 import dk.sdu.orderservice.service.OrderService;
 import io.dapr.Topic;
 import io.dapr.client.DaprClient;
@@ -11,6 +13,7 @@ import io.dapr.client.DaprClientBuilder;
 import io.dapr.client.domain.CloudEvent;
 import io.dapr.exceptions.DaprException;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.mapper.Mapper;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -19,7 +22,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @Slf4j
@@ -58,15 +64,24 @@ public class OrderController {
     @PostMapping(value = "/initOrder")
     @ResponseStatus(HttpStatus.OK)
     @Topic(name = "On_Checkout", pubsubName = pubSubName)
-    public Mono<ResponseEntity<String>> startOrder(CloudEvent<OrderDto> cloudEvent) {
+    public Mono<ResponseEntity<String>> startOrder(CloudEvent<OrderEvent> cloudEvent) {
         return Mono.fromSupplier(() -> {
             var order = cloudEvent.getData();
-            for (var product : order.getOrderProducts()) {
-                var id = product.getOrderId();
-                id = order.getOrderId();
-                product.setOrderId(id);
+            var orderId = UUID.randomUUID().toString();
+            List<OrderProduct> orderProductList = new ArrayList<>();
+            int i = 0;
+            for (Item o : order.getItems()){
+                var orderToAdd = new OrderProduct(i,orderId,o.getProductId(),o.getPrice(),o.getQuantity());
+                orderProductList.add(orderToAdd);
+                i+=1;
             }
-            orderService.addOrder(order);
+            Order orderToSave = new Order(orderId, order.getCustomerId(), "Pending", orderProductList);
+            log.info("Created a new order with status Pending: " + orderToSave.getOrderId());
+            for (var product : orderToSave.getOrderProducts()) {
+                product.setOrderId(orderToSave.getOrderId());
+            }
+            OrderDto dto = new OrderDto(orderId,order.getCustomerId(), orderToSave.orderStatus, orderToSave.getOrderProducts());
+            orderService.addOrder(dto);
             return ResponseEntity.ok().build();
         });
     }
