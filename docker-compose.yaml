@@ -196,7 +196,7 @@ services:
   order-service:
     build:
       context: .
-      dockerfile: cart_service/Dockerfile
+      dockerfile: order-service/Dockerfile
     ports:
       - "8083:8083"
     environment:
@@ -204,8 +204,7 @@ services:
     depends_on:
       "broker":
         condition: service_healthy
-      "redis-cart_service":
-        condition: service_healthy
+
 
   order-api-dapr:
     image: "daprio/daprd:1.9.4"

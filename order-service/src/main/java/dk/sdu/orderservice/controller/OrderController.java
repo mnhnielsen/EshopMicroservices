@@ -64,7 +64,7 @@ public class OrderController {
     @PostMapping(value = "/initOrder")
     @ResponseStatus(HttpStatus.OK)
     @Topic(name = "On_Checkout", pubsubName = pubSubName)
-    public Mono<ResponseEntity<String>> startOrder(CloudEvent<OrderEvent> cloudEvent) {
+    public Mono<ResponseEntity<String>> startOrder(@RequestBody CloudEvent<OrderEvent> cloudEvent) {
         return Mono.fromSupplier(() -> {
             var order = cloudEvent.getData();
             var orderId = UUID.randomUUID().toString();
@@ -88,7 +88,7 @@ public class OrderController {
 
     @PostMapping("/submit/{id}")
     @ResponseStatus(HttpStatus.OK)
-    public ResponseEntity<String> submitOrder(@PathVariable String id, @RequestBody CloudEvent<CustomerDto> cloudEvent) {
+    public ResponseEntity<String> submitOrder(@PathVariable String id) {
         DaprClient client = new DaprClientBuilder().build();
         try {
             var order = orderService.getOrder(id);
@@ -97,9 +97,12 @@ public class OrderController {
                 return ResponseEntity.notFound().build();
             }
             order.get().setOrderStatus("Reserved");
-            var customer = new Customer(order.get().getCustomerId(), cloudEvent.getData().getName(),
-                    cloudEvent.getData().getEmail(), cloudEvent.getData().getAddress());
-            orderService.addCustomer(customer);
+
+
+//            var customer = new Customer(order.get().getCustomerId(), cloudEvent.getData().getName(),
+//                    cloudEvent.getData().getEmail(), cloudEvent.getData().getAddress());
+//            orderService.addCustomer(customer);
+
             var res = new PaymentDto(order.get().getOrderId(), order.get().getCustomerId(), order.get().getOrderStatus());
             client.publishEvent(pubSubName, "On_Order_Submit", res).block();
             log.info("Order {} submitted", id);
