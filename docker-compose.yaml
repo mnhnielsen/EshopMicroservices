@@ -199,6 +199,8 @@ services:
       dockerfile: cart_service/Dockerfile
     ports:
       - "8083:8083"
+    environment:
+      - spring.datasource.url=jdbc:mysql://mysql_order_service:3306/orderdb
     depends_on:
       "broker":
         condition: service_healthy
@@ -207,7 +209,7 @@ services:
 
   order-api-dapr:
     image: "daprio/daprd:1.9.4"
-    network_mode: "service:inventory_service"
+    network_mode: "service:order-service"
     command:
       [
         "./daprd",
