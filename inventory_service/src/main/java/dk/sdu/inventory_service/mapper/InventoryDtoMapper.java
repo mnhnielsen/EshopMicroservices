@@ -10,7 +10,7 @@ public class InventoryDtoMapper implements Function<Inventory, InventoryDto> {
 
     @Override
     public InventoryDto apply(Inventory inventory) {
-        return new InventoryDto(inventory.getId(),
+        return new InventoryDto(inventory.getProductId(),
                 inventory.getName(),
                 inventory.getDescription(),
                 inventory.getPrice(),

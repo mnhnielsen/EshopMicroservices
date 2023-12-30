@@ -7,19 +7,17 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
 
-  kafka:
+  broker:
     image: confluentinc/cp-kafka:7.3.0
-    container_name: kafka
+    container_name: broker
     ports:
       - "9092:9092"
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     healthcheck:
       test: [ "CMD", "nc", "-vz", "localhost", "9092" ]
@@ -27,27 +25,45 @@ services:
       timeout: 5s
       retries: 5
 
-  mongo-product_service:
+#  mongo-product_service:
+#    image: mongo:6-jammy
+#    ports:
+#      - "27017:27017"
+#    expose:
+#      - "27017"
+#    volumes:
+#      - ./mongo-data/product-service-data:/data/db
+#    networks:
+#      - default
+
+  mongo-inventory_service:
     image: mongo:6-jammy
     ports:
       - "27017:27017"
     expose:
       - "27017"
     volumes:
-      - ./mongo-data/product-service-data:/data/db
-    networks:
-      - default
-
-  mongo-inventory_service:
-    image: mongo:6-jammy
-    ports:
-      - "27018:27017"
-    expose:
-      - "27018"
-    volumes:
       - ./mongo-data/inventory-service-data:/data/db
     networks:
       - default
+
+  mysql_order_service:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orderdb
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: 888
+    ports:
+      - "3306:3306"
+    expose:
+      - "3306"
+    volumes:
+#      - ./order-service/data:/var/lib/mysql
+      - ./order-service/data:/docker-entrypoint-initdb.d
+    networks:
+    - default
 
   eureka-server:
     image: springcloud/eureka
@@ -68,46 +84,63 @@ services:
       timeout: 5s
       retries: 5
 
-  keykloak:
-    image: keycloak:latest
-    environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin123
-      KEYCLOAK_LOGLEVEL: INFO
-      ROOT_LOGLEVEL: INFO
-    ports:
-      - '8787:8787'
-      - '8181:8181'
+  dapr-placement:
+    image: "daprio/dapr:1.9.4"
     command:
-      - start-dev
+      [
+        "./placement",
+        "-port",
+        "50000",
+        "-log-level",
+        "debug"
+      ]
+    ports:
+      - "50000:50000"
 
   zipkin:
     image: "openzipkin/zipkin"
     ports:
       - "9411:9411"
 
-  cart_service:
+#  api-gateway:
+#    build:
+#      context: .
+#      dockerfile: api-gateway/Dockerfile
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      "broker":
+#        condition: service_healthy
+#      "redis-cart_service":
+#        condition: service_healthy
+
+  inventory_service:
     build:
       context: .
-      dockerfile: cart_service/Dockerfile
+      dockerfile: inventory_service/Dockerfile
+    environment:
+      - SERVER_PORT=8082
+      - MONGODB_URI=mongodb:mongodb://mongo-inventory_service:27017
+      - MONGODB_STATUS_HOST=mongo-inventory_service
+      - MONGODB_STATUS_PORT=27017
     ports:
-      - "8002:80"
+      - "8082:8082"
     depends_on:
-#      "kafka":
-#        condition: service_healthy
+      "broker":
+        condition: service_healthy
       "redis-cart_service":
         condition: service_healthy
 
-  cart-api-dapr:
+  inventory-api-dapr:
     image: "daprio/daprd:1.9.4"
-    network_mode: "service:cart_service"
+    network_mode: "service:inventory_service"
     command:
       [
         "./daprd",
         "-app-id",
-        "cart_service",
+        "inventory-service",
         "-app-port",
-        "80",
+        "8082",
         "-log-level",
         "debug",
         "-placement-host-address",
@@ -120,7 +153,81 @@ services:
     volumes:
       - "./dapr/:/dapr"
     depends_on:
-      "kafka":
+      "broker":
+        condition: service_healthy
+
+  cart_service:
+    build:
+      context: .
+      dockerfile: cart_service/Dockerfile
+    ports:
+      - "8089:8089"
+    depends_on:
+      "broker":
+        condition: service_healthy
+      "redis-cart_service":
+        condition: service_healthy
+
+  cart-api-dapr:
+    image: "daprio/daprd:1.9.4"
+    network_mode: "service:cart_service"
+    command:
+      [
+        "./daprd",
+        "-app-id",
+        "cart_service",
+        "-app-port",
+        "8089",
+        "-log-level",
+        "debug",
+        "-placement-host-address",
+        "dapr-placement:50000",
+        "-components-path",
+        "./dapr/components",
+        "-config",
+        "./dapr/config.yaml"
+      ]
+    volumes:
+      - "./dapr/:/dapr"
+    depends_on:
+      "broker":
+        condition: service_healthy
+
+  order-service:
+    build:
+      context: .
+      dockerfile: cart_service/Dockerfile
+    ports:
+      - "8083:8083"
+    depends_on:
+      "broker":
+        condition: service_healthy
+      "redis-cart_service":
+        condition: service_healthy
+
+  order-api-dapr:
+    image: "daprio/daprd:1.9.4"
+    network_mode: "service:inventory_service"
+    command:
+      [
+        "./daprd",
+        "-app-id",
+        "inventory-service",
+        "-app-port",
+        "8083",
+        "-log-level",
+        "debug",
+        "-placement-host-address",
+        "dapr-placement:50000",
+        "-components-path",
+        "./dapr/components",
+        "-config",
+        "./dapr/config.yaml"
+      ]
+    volumes:
+      - "./dapr/:/dapr"
+    depends_on:
+      "broker":
         condition: service_healthy
 
 networks:

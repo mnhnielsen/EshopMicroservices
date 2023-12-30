@@ -10,5 +10,5 @@ import lombok.Setter;
 public class ReservationEvent {
     private String customerId;
     private int quantity;
-    private String ProductId;
+    private String productId;
 }
