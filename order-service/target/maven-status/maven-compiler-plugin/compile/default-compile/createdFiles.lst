@@ -15,6 +15,8 @@ dk/sdu/orderservice/dto/CustomerDto.class
 dk/sdu/orderservice/model/Order.class
 dk/sdu/orderservice/model/OrderProduct$OrderProductBuilder.class
 dk/sdu/orderservice/mapper/OrderDtoMapper.class
+dk/sdu/orderservice/dto/CreateOrderDto.class
 dk/sdu/orderservice/repository/CustomerRepository.class
 dk/sdu/orderservice/dto/OrderProductDto.class
+dk/sdu/orderservice/mapper/CreateOrderMapper.class
 dk/sdu/orderservice/service/OrderService.class
