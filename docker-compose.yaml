@@ -231,5 +231,75 @@ services:
       "broker":
         condition: service_healthy
 
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    ports:
+      - "8084:8084"
+    depends_on:
+      "broker":
+        condition: service_healthy
+
+  payment-api-dapr:
+    image: "daprio/daprd:1.9.4"
+    network_mode: "service:payment-service"
+    command:
+      [
+        "./daprd",
+        "-app-id",
+        "payment-service",
+        "-app-port",
+        "8084",
+        "-log-level",
+        "debug",
+        "-placement-host-address",
+        "dapr-placement:50000",
+        "-components-path",
+        "./dapr/components",
+        "-config",
+        "./dapr/config.yaml"
+      ]
+    volumes:
+      - "./dapr/:/dapr"
+    depends_on:
+      "broker":
+        condition: service_healthy
+
+  shipping-service:
+    build:
+      context: .
+      dockerfile: shipping-service/Dockerfile
+    ports:
+      - "8085:8085"
+    depends_on:
+      "broker":
+        condition: service_healthy
+
+  shipping-api-dapr:
+    image: "daprio/daprd:1.9.4"
+    network_mode: "service:shipping-service"
+    command:
+      [
+        "./daprd",
+        "-app-id",
+        "shipping-service",
+        "-app-port",
+        "8085",
+        "-log-level",
+        "debug",
+        "-placement-host-address",
+        "dapr-placement:50000",
+        "-components-path",
+        "./dapr/components",
+        "-config",
+        "./dapr/config.yaml"
+      ]
+    volumes:
+      - "./dapr/:/dapr"
+    depends_on:
+      "broker":
+        condition: service_healthy
+
 networks:
   default:

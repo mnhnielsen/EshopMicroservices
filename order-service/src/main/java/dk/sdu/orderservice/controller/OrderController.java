@@ -170,14 +170,16 @@ public class OrderController {
         return Mono.fromSupplier(() -> {
             try {
                 DaprClient client = new DaprClientBuilder().build();
-                var order = orderService.getOrder(cloudEvent.getData().getOrderId());
+                var order = orderService.getOrder(cloudEvent.getData().getCustomerId());
                 if (order.isEmpty()) {
-                    log.error("Order with ID {} not found", cloudEvent.getData().getOrderId());
+                    log.error("Order with ID {} not found", cloudEvent.getData().getCustomerId());
                     return ResponseEntity.notFound().build();
                 }
                 order.get().setOrderStatus("Cancelled");
+                log.info("Order {} payment failed. Order is now canceled", cloudEvent.getData().getCustomerId());
                 orderService.updateOrderStatus(order.get());
                 for (var product : order.get().getOrderProducts()) {
+                    log.info("Canceeling:  " + product.getProductId());
                     var cancelOrder = new CancelOrderDto(order.get().getOrderId(), product.getProductId(), product.getQuantity());
                     client.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder).block();
                 }

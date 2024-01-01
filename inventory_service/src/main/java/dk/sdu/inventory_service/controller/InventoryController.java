@@ -1,5 +1,6 @@
 package dk.sdu.inventory_service.controller;
 
+import dk.sdu.inventory_service.dto.CancelOrderDto;
 import dk.sdu.inventory_service.dto.InventoryDto;
 import dk.sdu.inventory_service.model.Reservation;
 import dk.sdu.inventory_service.model.ReservationEvent;
@@ -116,21 +117,32 @@ public class InventoryController {
 
     @PostMapping("/cancel")
     @ResponseStatus(HttpStatus.OK)
-    @Topic(name = "On_Order_Canceled", pubsubName = pubSubName)
-    public Mono<ResponseEntity<?>> cancelOrder(@RequestBody CloudEvent<ReservationEvent> cloudEvent) {
+    @Topic(name = "On_Order_Cancel", pubsubName = pubSubName)
+    public Mono<ResponseEntity<?>> cancelOrder(@RequestBody CloudEvent<CancelOrderDto> cloudEvent) {
         return Mono.fromSupplier(() -> {
-            String reservationId = cloudEvent.getData().getProductId();
-            var product = inventoryService.getItemById(reservationId);
-            if (product.isEmpty()) {
-                return ResponseEntity.notFound().build();
+            try {
+                var event = cloudEvent.getData();
+                logger.info(event.getCustomerId());
+                String reservationId = event.getCustomerId();
+                if(reservationId.isEmpty()) {
+                    logger.error("Could not find any products with ID: " + reservationId);
+                    return ResponseEntity.notFound().build();
+                }
+                var product = inventoryService.getItemById(reservationId);
+                if (product.isEmpty()) {
+                    return ResponseEntity.notFound().build();
+                }
+                var add = product.get().getStock();
+                add += cloudEvent.getData().getQuantity();
+                product.get().setStock(add);
+                inventoryService.updateInventory(product.get());
+                logger.info("Order was canceled. Adding {} items back to stock for product {}",
+                        cloudEvent.getData().getQuantity(), cloudEvent.getData().getCustomerId());
+                return ResponseEntity.ok().body(product.get());
+            } catch (Exception e) {
+                logger.error("Error occurred while canceling order: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing the request");
             }
-            var add = product.get().getStock();
-            add += cloudEvent.getData().getQuantity();
-            product.get().setStock(add);
-            inventoryService.updateInventory(product.get());
-            logger.info("Order was canceled. Adding {} items back to stock for product {}",
-                    cloudEvent.getData().getQuantity(), cloudEvent.getData().getProductId());
-            return ResponseEntity.ok().body(product.get());
         });
     }
 
