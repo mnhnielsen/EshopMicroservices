@@ -4,10 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
-@AllArgsConstructor
 @Getter
 @Setter
-public class Payment {
+@AllArgsConstructor
+public class PaymentDto {
     private String customerId;
     private String orderId;
     private String orderStatus;

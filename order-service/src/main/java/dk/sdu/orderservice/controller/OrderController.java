@@ -66,21 +66,19 @@ public class OrderController {
     @Topic(name = "On_Checkout", pubsubName = pubSubName)
     public Mono<ResponseEntity<String>> startOrder(@RequestBody CloudEvent<OrderEvent> cloudEvent) {
         return Mono.fromSupplier(() -> {
+
             var order = cloudEvent.getData();
             var orderId = UUID.randomUUID().toString();
+
             List<OrderProduct> orderProductList = new ArrayList<>();
-            int i = 0;
             for (Item o : order.getItems()){
-                var orderToAdd = new OrderProduct(i,orderId,o.getProductId(),o.getPrice(),o.getQuantity());
+                var orderToAdd = new OrderProduct(orderId,o.getProductId(),o.getPrice(),o.getQuantity());
                 orderProductList.add(orderToAdd);
-                i+=1;
+                log.info("Added product to order: " + orderToAdd.getProductId());
             }
             Order orderToSave = new Order(orderId, order.getCustomerId(), "Pending", orderProductList);
             log.info("Created a new order with status Pending: " + orderToSave.getOrderId());
-            for (var product : orderToSave.getOrderProducts()) {
-                product.setOrderId(orderToSave.getOrderId());
-            }
-            OrderDto dto = new OrderDto(orderId,order.getCustomerId(), orderToSave.orderStatus, orderToSave.getOrderProducts());
+            OrderDto dto = new OrderDto(orderToSave.getOrderId(),orderToSave.getCustomerId(), orderToSave.getOrderStatus(), orderToSave.getOrderProducts());
             orderService.addOrder(dto);
             return ResponseEntity.ok().build();
         });
@@ -97,14 +95,9 @@ public class OrderController {
                 return ResponseEntity.notFound().build();
             }
             order.get().setOrderStatus("Reserved");
-
-
-//            var customer = new Customer(order.get().getCustomerId(), cloudEvent.getData().getName(),
-//                    cloudEvent.getData().getEmail(), cloudEvent.getData().getAddress());
-//            orderService.addCustomer(customer);
-
-            var res = new PaymentDto(order.get().getOrderId(), order.get().getCustomerId(), order.get().getOrderStatus());
-            client.publishEvent(pubSubName, "On_Order_Submit", res).block();
+            log.info("Order with Id {} , status set to reserved {}", id, order.get().getOrderStatus());
+            var paymentDto = new PaymentDto(order.get().getOrderId(), order.get().getCustomerId(), order.get().getOrderStatus());
+            client.publishEvent(pubSubName, "On_Order_Submit", paymentDto).block();
             log.info("Order {} submitted", id);
             return ResponseEntity.ok().body(String.valueOf(order));
         } catch (DaprException e) {
@@ -118,7 +111,7 @@ public class OrderController {
 
     @PostMapping("/add/{orderId}")
     public ResponseEntity<Void> addProductToOrder(@PathVariable String orderId, @RequestBody OrderProductDto orderProductDto) {
-        orderService.addProductToOrder(orderId, orderProductDto);
+        orderService.addProductToOrder(UUID.fromString(orderId), orderProductDto);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
@@ -154,8 +147,7 @@ public class OrderController {
                 log.error("Order with ID {} not found", orderId);
                 return ResponseEntity.notFound().build();
             }
-            var orderToDelete = cloudEvent.getData();
-            orderService.deleteOrder(orderToDelete.getOrderId());
+            orderService.deleteOrder(order.get().getOrderId());
             for (var product : order.get().getOrderProducts()) {
                 var cancelOrder = new CancelOrderDto(order.get().getOrderId(), product.getProductId(), product.getQuantity());
                 client.publishEvent(pubSubName, "On_Order_Cancel", cancelOrder).block();

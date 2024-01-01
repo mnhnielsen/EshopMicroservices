@@ -1,6 +1,6 @@
 package dk.sdu.cart_service.controller;
 
-import dk.sdu.cart_service.model.Payment;
+import dk.sdu.cart_service.model.PaymentDto;
 import dk.sdu.cart_service.model.Reservation;
 import dk.sdu.cart_service.model.ReservationEvent;
 import dk.sdu.cart_service.service.CartService;
@@ -24,6 +24,7 @@ import java.net.URISyntaxException;
 @RequestMapping("api/cart")
 public class CartController {
     public final String pubSubName = "kafka-pubsub";
+    public final String redisStateStore = "cart-store";
     private static final Logger logger = LoggerFactory.getLogger(CartController.class);
     private final CartService cartService;
 
@@ -152,14 +153,17 @@ public class CartController {
     @PostMapping(value = "/orderSubmit")
     @ResponseStatus(HttpStatus.OK)
     @Topic(name = "On_Order_Submit", pubsubName = pubSubName)
-    public Mono<ResponseEntity<?>> removeWhenOrderSubmit(CloudEvent<Payment> cloudEvent) {
+    public Mono<ResponseEntity<String>> removeWhenOrderSubmit(@RequestBody(required = false) CloudEvent<PaymentDto> cloudEvent) {
         return Mono.fromSupplier(() -> {
             try {
-                var payment = cloudEvent.getData();
-                var res = cartService.getCartById(payment.getCustomerId());
+                DaprClient client = new DaprClientBuilder().build();
+                var paymentDto = cloudEvent.getData();
+                logger.info(paymentDto.getCustomerId());
+                var res = cartService.getCartById(paymentDto.getCustomerId());
                 cartService.removeCart(res.getCustomerId());
+                client.getState(redisStateStore, paymentDto.getCustomerId(), Reservation.class).block(); //check up on Object.class
                 logger.info("Order submitted. Removing content of basket");
-                return ResponseEntity.ok().body(String.valueOf(payment.getCustomerId()));
+                return ResponseEntity.ok().body(String.valueOf(paymentDto.getCustomerId()));
             } catch (Exception e) {
                 logger.error("Error deleting reservation: {}", e.getMessage());
                 throw new RuntimeException(e);
@@ -170,7 +174,7 @@ public class CartController {
     @PostMapping(value = "/failedReservation")
     @ResponseStatus(HttpStatus.OK)
     @Topic(name = "On_Reservation_Failed", pubsubName = pubSubName)
-    public Mono<ResponseEntity<?>> failedReservation(CloudEvent<ReservationEvent> cloudEvent) {
+    public Mono<ResponseEntity<?>> failedReservation(@RequestBody(required = false) CloudEvent<ReservationEvent> cloudEvent) {
         return Mono.fromSupplier(() ->{
             try {
                 var reservationEvent = cloudEvent.getData();

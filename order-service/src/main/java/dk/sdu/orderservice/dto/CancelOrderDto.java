@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class CancelOrderDto {
-    public String orderId;
-    public String customerId;
-    public int quantity;
+    private String orderId;
+    private String customerId;
+    private int quantity;
 }

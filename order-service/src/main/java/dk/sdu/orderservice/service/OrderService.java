@@ -23,6 +23,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Service
@@ -80,13 +81,31 @@ public class OrderService {
         }
     }
 
-    public void addProductToOrder(String orderId, OrderProductDto orderProductDto) {
+    public OrderProduct addProduct(OrderProduct orderProduct) {
         try {
-            if (orderExists(orderId)) {
+
+            OrderProduct orderProductToSave = OrderProduct.builder()
+                    .productId(orderProduct.getProductId())
+                    .orderId(orderProduct.getOrderId())
+                    .price(orderProduct.getPrice())
+                    .quantity(orderProduct.getQuantity())
+                    .build();
+            orderProductRepository.save(orderProductToSave);
+            log.info("Saved orderproducts {}", orderProductToSave.getOrderId());
+            return orderProductToSave;
+        } catch (Exception e) {
+            log.error("Error saving order: {}", e.getMessage(), e);
+            throw new RuntimeException("Error saving order", e);
+        }
+    }
+
+    public void addProductToOrder(UUID orderId, OrderProductDto orderProductDto) {
+        try {
+            if (orderExists(String.valueOf(orderId))) {
                 OrderProduct orderProduct = OrderProduct.builder()
                         .id(orderProductDto.getId())
                         .productId(orderProductDto.getProductId())
-                        .orderId(orderProductDto.orderId = orderId)
+                        .orderId(orderProductDto.getOrderId())
                         .price(orderProductDto.getPrice())
                         .quantity(orderProductDto.getQuantity())
                         .build();

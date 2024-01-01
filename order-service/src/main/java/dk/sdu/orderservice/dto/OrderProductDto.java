@@ -7,9 +7,16 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderProductDto {
-    public int id;
-    public String orderId;
-    public String productId;
-    public double price;
-    public int quantity;
+    private int id;
+    private String orderId;
+    private String productId;
+    private double price;
+    private int quantity;
+
+    public OrderProductDto(String orderId, String productId, double price, int quantity) {
+        this.orderId = orderId;
+        this.productId = productId;
+        this.price = price;
+        this.quantity = quantity;
+    }
 }

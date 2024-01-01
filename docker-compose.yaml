@@ -213,7 +213,7 @@ services:
       [
         "./daprd",
         "-app-id",
-        "inventory-service",
+        "order-service",
         "-app-port",
         "8083",
         "-log-level",

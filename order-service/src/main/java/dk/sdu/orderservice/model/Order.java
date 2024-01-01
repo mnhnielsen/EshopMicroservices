@@ -19,9 +19,9 @@ import java.util.List;
 @Table(name = "Orders")
 public class Order {
     @Id
-    public String orderId;
-    public String customerId;
-    public String orderStatus;
+    private String orderId;
+    private String customerId;
+    private String orderStatus;
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER, mappedBy = "orderId")
-    public List<OrderProduct> orderProducts;
+    private List<OrderProduct> orderProducts;
 }
