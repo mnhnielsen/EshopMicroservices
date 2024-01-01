@@ -6,6 +6,7 @@ import dk.sdu.cart_service.model.ReservationEvent;
 import dk.sdu.cart_service.service.CartService;
 import io.dapr.Topic;
 import io.dapr.client.domain.CloudEvent;
+import io.dapr.client.domain.State;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +46,9 @@ public class CartController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer ID cannot be null or empty");
         }
         try {
-            Reservation res = cartService.getCartById(customerId);
+            DaprClient client = new DaprClientBuilder().build();
+            State<Reservation> reservationState = client.getState(redisStateStore, customerId, Reservation.class).block();
+            var res = reservationState.getValue();
             if (res == null) {
                 logger.info("No reservation found for: {}", customerId);
                 return ResponseEntity.notFound().build();
@@ -72,12 +75,15 @@ public class CartController {
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<String> updateCart(@PathVariable String customerId, @RequestBody Reservation reservation) {
         try {
-            var res = cartService.getCartById(customerId);
+            DaprClient client = new DaprClientBuilder().build();
+            State<Reservation> reservationState = client.getState(redisStateStore, customerId, Reservation.class).block();
+            var res = reservationState.getValue();
             if (res == null) {
                 logger.info("No reservation found for: {}", customerId);
                 return ResponseEntity.notFound().build();
             }
-            cartService.saveReservation(reservation);
+
+            client.saveState(redisStateStore, customerId, reservation).block();
             logger.info("Reservation updated for: {}", customerId);
             return ResponseEntity.ok().body(String.valueOf(res.getCustomerId()));
         } catch (Exception e) {
@@ -118,7 +124,8 @@ public class CartController {
             if (reservation == null) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
-            cartService.saveReservation(reservation);
+            //cartService.saveReservation(reservation);
+            client.saveState(redisStateStore, reservation.getCustomerId(), reservation).block();
             for (var item : reservation.getItems()) {
                 ReservationEvent reservationEvent = new ReservationEvent(reservation.getCustomerId(), item.getQuantity(), item.getProductId());
                 client.publishEvent(pubSubName, "On_Products_Reserved", reservationEvent).block();
@@ -136,7 +143,8 @@ public class CartController {
     public ResponseEntity<String> checkout(@PathVariable String customerId) {
         try {
             DaprClient client = new DaprClientBuilder().build();
-            var res = cartService.getCartById(customerId);
+            State<Reservation> reservationState = client.getState(redisStateStore, customerId, Reservation.class).block();
+            var res = reservationState.getValue();
             if (res == null) {
                 logger.info("No reservation found for: {}", customerId);
                 return ResponseEntity.notFound().build();
@@ -158,11 +166,9 @@ public class CartController {
             try {
                 DaprClient client = new DaprClientBuilder().build();
                 var paymentDto = cloudEvent.getData();
-                logger.info(paymentDto.getCustomerId());
-                var res = cartService.getCartById(paymentDto.getCustomerId());
-                cartService.removeCart(res.getCustomerId());
-                client.getState(redisStateStore, paymentDto.getCustomerId(), Reservation.class).block(); //check up on Object.class
-                logger.info("Order submitted. Removing content of basket");
+                var customerId = paymentDto.getOrderId();
+                logger.info("CustomerID: " + customerId);
+                client.deleteState(redisStateStore, customerId).block();
                 return ResponseEntity.ok().body(String.valueOf(paymentDto.getCustomerId()));
             } catch (Exception e) {
                 logger.error("Error deleting reservation: {}", e.getMessage());
@@ -171,19 +177,33 @@ public class CartController {
         });
     }
 
+    private Reservation getStateStore(String stateStoreName, String key) throws Exception {
+        try (DaprClient client = (new DaprClientBuilder()).build()) {
+            // Get state
+            State<Reservation> retrievedMessage = client.getState(stateStoreName, key, Reservation.class).block();
+
+            if(retrievedMessage == null)
+                return null;
+
+            return retrievedMessage.getValue();
+        }
+    }
+
     @PostMapping(value = "/failedReservation")
     @ResponseStatus(HttpStatus.OK)
     @Topic(name = "On_Reservation_Failed", pubsubName = pubSubName)
     public Mono<ResponseEntity<?>> failedReservation(@RequestBody(required = false) CloudEvent<ReservationEvent> cloudEvent) {
         return Mono.fromSupplier(() ->{
             try {
+                DaprClient client = new DaprClientBuilder().build();
                 var reservationEvent = cloudEvent.getData();
-                var res = cartService.getCartById(reservationEvent.getCustomerId());
+                State<Reservation> reservationState = client.getState(redisStateStore, reservationEvent.getCustomerId(), Reservation.class).block();
+                var res = reservationState.getValue();
                 if (res == null) {
                     logger.info("No reservation found for: {}", reservationEvent.getCustomerId());
                     return ResponseEntity.notFound().build();
-            }
-                cartService.removeCart(res.getCustomerId());
+                }
+                client.deleteState(redisStateStore, res.getCustomerId()).block();
                 logger.info("Reservation deleted for: {}", reservationEvent.getCustomerId());
                 return ResponseEntity.ok().body(String.valueOf(reservationEvent.getCustomerId()));
             } catch (Exception e) {
@@ -194,5 +214,4 @@ public class CartController {
     }
 
 }
-
 
