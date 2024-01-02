@@ -202,7 +202,7 @@ public class CartController {
                 if (res == null) {
                     logger.info("No reservation found for: {}", reservationEvent.getCustomerId());
                     return ResponseEntity.notFound().build();
-            }
+                }
                 client.deleteState(redisStateStore, res.getCustomerId()).block();
                 logger.info("Reservation deleted for: {}", reservationEvent.getCustomerId());
                 return ResponseEntity.ok().body(String.valueOf(reservationEvent.getCustomerId()));
@@ -214,5 +214,4 @@ public class CartController {
     }
 
 }
-
 

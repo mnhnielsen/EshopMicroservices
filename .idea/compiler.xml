@@ -8,9 +8,11 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="inventory_service" />
-        <module name="api-gateway" />
         <module name="cart_service" />
         <module name="discovery-server" />
+        <module name="payment-service" />
+        <module name="api-gateway" />
+        <module name="Shipping-service" />
         <module name="order-service" />
         <module name="product_service" />
       </profile>
@@ -18,11 +20,13 @@
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="Shipping-service" options="-parameters" />
       <module name="api-gateway" options="-parameters" />
       <module name="cart_service" options="-parameters" />
       <module name="discovery-server" options="-parameters" />
       <module name="inventory_service" options="-parameters" />
       <module name="order-service" options="-parameters" />
+      <module name="payment-service" options="-parameters" />
       <module name="product_service" options="-parameters" />
     </option>
   </component>

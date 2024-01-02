@@ -5,34 +5,18 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.1.4</version>
+		<version>3.2.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>dk.sdu</groupId>
-	<artifactId>EshopMicroservices</artifactId>
+	<artifactId>Shipping-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>EshopMicroservices</name>
-	<description>EshopMicroservices</description>
+	<name>Shipping-service</name>
+	<description>Shipping-service</description>
 	<properties>
 		<java.version>17</java.version>
-		<spring-cloud.version>2022.0.4</spring-cloud.version>
 	</properties>
-	<modules>
-		<module>shipping-service</module>
-		<module>payment-service</module>
-		<module>order-service</module>
-		<module>discovery-server</module>
-		<module>product_service</module>
-		<module>cart_service</module>
-		<module>inventory_service</module>
-		<module>api-gateway</module>
-	</modules>
-	<packaging>pom</packaging>
 	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-mongodb</artifactId>
-		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
@@ -44,26 +28,24 @@
 			<optional>true</optional>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
 			<groupId>io.dapr</groupId>
 			<artifactId>dapr-sdk</artifactId>
 			<version>1.10.0</version>
 		</dependency>
-		<!-- Dapr's SDK for Actors (optional). -->
 		<dependency>
 			<groupId>io.dapr</groupId>
 			<artifactId>dapr-sdk-actors</artifactId>
 			<version>1.10.0</version>
 		</dependency>
-		<!-- Dapr's SDK integration with SpringBoot (optional). -->
 		<dependency>
 			<groupId>io.dapr</groupId>
 			<artifactId>dapr-sdk-springboot</artifactId>
 			<version>1.10.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 
@@ -75,7 +57,7 @@
 				<configuration>
 					<excludes>
 						<exclude>
-							<groupId>org.project-lombok</groupId>
+							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
 						</exclude>
 					</excludes>

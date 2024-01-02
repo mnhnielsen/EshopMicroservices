@@ -11,6 +11,7 @@ import java.io.Serializable;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 public class Item implements Serializable {
     private int quantity;
     private double price;
