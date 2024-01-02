@@ -9,7 +9,6 @@ import java.io.Serializable;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @AllArgsConstructor
 @NoArgsConstructor
 public class Item implements Serializable {

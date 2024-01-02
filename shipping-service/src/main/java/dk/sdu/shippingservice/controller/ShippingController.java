@@ -1,5 +1,6 @@
 package dk.sdu.shippingservice.controller;
 
+import dk.sdu.shippingservice.model.PaymentDto;
 import dk.sdu.shippingservice.model.ShippingDto;
 import io.dapr.Topic;
 import io.dapr.client.DaprClient;
@@ -30,15 +31,14 @@ public class ShippingController {
         return Mono.fromCallable(() -> {
             try {
                 DaprClient client = new DaprClientBuilder().build();
-                log.info("READY FOR SHIPPING: Have Order: {}, from Customer: {}, with status: {}", cloudEvent.getData().getOrderId(),
-                        cloudEvent.getData().getCustomerId(), cloudEvent.getData().getOrderStatus());
+                var event = cloudEvent.getData();
+                var paymentConfirm = new PaymentDto(event.getOrderId(), event.getCustomerId(), "Shipped");
+                log.info("READY FOR SHIPPING: " + paymentConfirm.getOrderId());
                 UUID uuid = UUID.randomUUID();
                 String trackingId = uuid.toString();
-                var event = cloudEvent.getData();
-                client.publishEvent(pubSubName, "On_Order_Shipped", event).block();
+                client.publishEvent(pubSubName, "On_Order_Shipped", paymentConfirm).block();
                 log.info("A tracking id: {} has been generated", trackingId);
-                log.info("Order shipped for Customer: {}, with Order: {}",
-                        cloudEvent.getData().getCustomerId(), cloudEvent.getData().getOrderId());
+                log.info("Order shipped with id: {}", trackingId);
                 return ResponseEntity.ok().body("Order shipped");
             } catch (Exception e) {
                 log.error("Error occurred while publishing event", e);
